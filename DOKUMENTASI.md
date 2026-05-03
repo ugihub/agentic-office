@@ -468,3 +468,252 @@ Phase 2 — C-Suite + SSC Agents:
 
 *Dokumentasi dihasilkan otomatis oleh Claude Code pada 2026-05-03.*
 *Phase 0-1 implementation selesai dalam satu sesi.*
+
+---
+
+## Phase 2 — C-Suite + SSC Agents + API Server
+
+**Tanggal:** 2026-05-03
+**Fase:** Phase 2 — Agent Layer + HTTP API
+
+---
+
+### Packages & Services yang Ditambahkan
+
+#### `@bureau/models` — Mongoose Models
+
+**`packages/models/src/task-envelope.model.ts`**
+- `TaskEnvelopeDocument` — dokumen utama lifecycle task
+- Field kritis: `stageVersion` (optimistic concurrency), `idempotencyKey` (unique sparse index), semua monetary field pakai `Decimal128`
+- `pendingDecision` embedded: `{ question, options[], expiresAt, defaultAction, promptedAt }`
+
+**`packages/models/src/budget.model.ts`**
+- `BudgetDocument` — budget per tenant per bulan
+- `remaining: Decimal128` — atomic decrement via `$inc`
+- `reservations[]` — per-task tracking dengan amount + reservedAt
+- `isFrozen: boolean` — freeze budget untuk compliance
+- Unique index: `{ tenantId, periodYear, periodMonth }`
+
+**`packages/models/src/cost-analytics.model.ts`**
+- `CostEventModel` — setiap LLM invocation direkam
+- TTL index 365 hari (`expiresAt`)
+- `retryAttempt`, `isEscalated`, `escalationTier` untuk ML training signal
+- `userId: null` setelah GDPR deletion (field nullable by design)
+
+**`packages/models/src/api-key.model.ts`**
+- `ApiKeyModel` — API key dengan `keyHash: sha256:<hex>`, `keyPrefix` untuk UI
+- `UserProviderKeyModel` — user LLM keys terenkripsi AES-256-GCM
+
+---
+
+#### `@bureau/task-machine` — XState 5 State Machine
+
+**`packages/task-machine/src/machine.ts`**
+
+10 states:
+```
+Submitted → Preparing → Researching → Producing
+         ↘ (fast path skips Researching)
+Producing → Reviewing → Formatting → Completed
+          ↘ (QA fail < 3x) → loop back to Producing
+          ↘ (QA fail ≥ 3x) → AwaitingUserDecision
+          ↘ (budget exhausted) → AwaitingUserDecision
+Formatting → Completed
+AwaitingUserDecision → [approve → Producing | cancel → Cancelled | best_effort → Formatting]
+```
+
+Konstanta penting:
+- `MAX_QA_RETRIES = 3` — setelah 3x fail QA, eskalasi ke user
+- `DECISION_TIMEOUT` → default action `best_effort` (Formatting)
+- Fast path: skip Researching, langsung Producing
+
+**`packages/task-machine/src/__tests__/machine.test.ts`** — 8 test cases
+
+---
+
+#### `@bureau/core` — Orchestration Layer
+
+**`core/src/path-classifier/classifier.ts`**
+- `classifyPath(input)` → `fast | standard | premium`
+- `classifyCacheCategory(prompt)` → `financial | temporal | personnel | inventory | default`
+- `SYSTEM_FLOOR_TTL` — minimum TTL per kategori (financial=0, temporal=60s, dll.)
+- Rule-based classifier, **tidak ada LLM call** — digunakan saat submit task untuk routing
+
+**`core/src/agents/ssc/finance-ssc.ts`** — CRITICAL
+```typescript
+// ATOMIC: condition + update dalam SATU operasi MongoDB
+findOneAndUpdate(
+  { remaining: { $gte: estimatedCost } },  // condition
+  { $inc: { remaining: -amount } }          // update
+)
+// Bukan read-modify-write. Tidak ada race condition.
+```
+
+**`core/src/agents/ssc/hr-ssc.ts`**
+- `calculateComplexityScore(prompt, constraints)` → skor 0–10
+- `buildEscalationChain(complexity, tier)` → array [economy, standard, premium]
+- `MODEL_REGISTRY` — semua provider + pricing (Anthropic, Google, OpenAI, DeepSeek, Mistral, Qwen)
+
+**`core/src/agents/ssc/compliance-ssc.ts`**
+- Fast path: SchemaValidator saja (1 validator)
+- Full path: ToxicityValidator + FactualityValidator (prompt injection) + SchemaValidator
+- `runComplianceCheck()` → stops at first violation
+
+---
+
+#### `@bureau/cost-analytics` — Cost Recording
+
+**`packages/cost-analytics/src/record-cost.ts`**
+```typescript
+// Failure TIDAK block task delivery
+// Log error, return ok('skipped'), jalan terus
+export async function recordLlmInvocation(record): Promise<Result<string, Error>>
+```
+Write path aktif dari hari pertama. Setiap invocation LLM → CostEvent di MongoDB.
+
+---
+
+#### `@bureau/api-server` — Fastify 5 HTTP API
+
+**`pillars/api-server/src/server.ts`** — entry point
+- Plugins: `@fastify/cors`, `@fastify/helmet`, `@fastify/rate-limit`
+- Auth plugin, health routes, task routes, auth-key routes
+- Graceful SIGTERM shutdown (drain in-flight, close MongoDB)
+- JWT init di startup (RS256 dari env vars)
+
+**`pillars/api-server/src/middleware/auth.ts`**
+- Priority: `X-Api-Key` header → DB hash lookup → aktif/revoked/expired check
+- Fallback: `Authorization: Bearer <JWT>` → verify RS256
+- `req.authContext` disediakan untuk semua routes
+- `requireAuth()` dan `requirePermission()` — helper routes
+
+**`pillars/api-server/src/routes/tasks.ts`** — 8 endpoints
+
+| Method | Path | Fungsi |
+|---|---|---|
+| POST | /tasks | Submit task, idempotency-key support, classify path |
+| GET | /tasks | List tasks (limit/skip/stage filter) |
+| GET | /tasks/:taskId | Full envelope |
+| GET | /tasks/:taskId/status | Status + pendingDecision |
+| GET | /tasks/:taskId/stream | SSE real-time updates (1s polling) |
+| POST | /tasks/:taskId/cancel | Cancel task (atomic, skip terminal states) |
+| POST | /tasks/:taskId/decision | User input untuk AwaitingUserDecision |
+| POST | /tasks/:taskId/feedback | Rating setelah task selesai |
+
+**Idempotency-Key handling:**
+```
+Request dengan Idempotency-Key → cek DB → kalau sudah ada → return 200 existing
+Kalau belum ada → proses normal → simpan dengan key
+```
+
+**`pillars/api-server/src/routes/auth-keys.ts`** — 5 endpoints
+
+| Method | Path | Fungsi |
+|---|---|---|
+| POST | /auth/keys | Create API key (plaintext dikembalikan sekali) |
+| GET | /auth/keys | List keys (tanpa plaintext/hash) |
+| DELETE | /auth/keys/:keyId | Revoke key |
+| POST | /auth/provider-keys | Store encrypted LLM provider key |
+| DELETE | /auth/provider-keys/:provider | Remove provider key |
+
+---
+
+#### `@bureau/workers` — Background Workers
+
+**`pillars/workers/src/outbox-publisher.ts`**
+- Poll MongoDB outbox setiap 1 detik
+- Batch size 50 entries
+- Enqueue ke BullMQ dengan `jobId = outboxId` (deduplication)
+- Exponential backoff: 2^attempts * 1000ms, max 5 menit, max 5 attempts → Failed
+
+**`pillars/workers/src/decision-timeout.ts`**
+- Scan `AwaitingUserDecision` tasks dengan `pendingDecision.expiresAt < now` setiap 60 detik
+- Atomic claim via `findOneAndUpdate` (safe multi-instance)
+- Auto-execute `defaultAction` (biasanya `best_effort` → Formatting stage)
+- Stagger 10 detik pertama (tunggu MongoDB connect)
+
+**`pillars/workers/src/email.ts`**
+- Resend SDK untuk email transaksional
+- `sendDecisionRequiredEmail()` — notify user saat AwaitingUserDecision
+- `sendTaskCompletedEmail()` — optional completion notify
+- **CRITICAL:** Email failure TIDAK block task pipeline — return `ok('email-skipped')` jika RESEND_API_KEY tidak dikonfigurasi
+
+---
+
+### Rate Limiting
+
+- Global: 100 req/menit per API key atau IP (configurable via env)
+- Key generator: API key prefix atau IP address
+- Health routes dikecualikan (`/health/*`)
+
+---
+
+### Docker Compose Update
+
+| Service | Port | Fungsi |
+|---|---|---|
+| Redis 7 | 6379 | BullMQ + cache |
+| MongoDB 7 | 27017 | Primary datastore |
+| Jaeger | 16686 | Distributed tracing |
+| Prometheus | 9090 | Metrics |
+| Grafana | 3001 | Dashboards |
+| **api-server** | **3001** | **Fastify HTTP API** |
+| **workers** | — | **Outbox publisher + decision timeout** |
+
+Dockerfiles: `deploy/Dockerfile.api-server`, `deploy/Dockerfile.workers`
+
+---
+
+### Checklist Phase 2 — Status
+
+| Item | Status |
+|---|---|
+| `@bureau/models` — TaskEnvelope, Budget, CostEvent, ApiKey | ✅ |
+| `@bureau/task-machine` — XState 5, 10 states, MAX_QA_RETRIES=3 | ✅ |
+| `@bureau/core` — path-classifier, classifyTask, classifyPath | ✅ |
+| `@bureau/core` — Finance SSC: `reserveBudgetAtomic` (findOneAndUpdate + $gte) | ✅ CRITICAL |
+| `@bureau/core` — HR SSC: complexity scoring + escalation chain + MODEL_REGISTRY | ✅ |
+| `@bureau/core` — Compliance SSC: fast path (1 validator) + full path (3 validators) | ✅ |
+| `@bureau/cost-analytics` — recordLlmInvocation, failure tidak block pipeline | ✅ CRITICAL |
+| Fastify API server: CORS, Helmet, rate-limit, auth plugin | ✅ |
+| Auth middleware: X-Api-Key (SHA-256 hash) + JWT RS256 | ✅ |
+| 8 task endpoints termasuk SSE stream + idempotency | ✅ |
+| 5 auth-key endpoints (create/list/revoke/provider-keys) | ✅ |
+| Outbox publisher: poll 1s, batch 50, BullMQ deduplication | ✅ |
+| Decision timeout worker: scan 60s, atomic claim, auto-execute | ✅ |
+| Email service (Resend): decision + completion notify | ✅ |
+| Dockerfiles: api-server + workers | ✅ |
+
+---
+
+## Poin Kritis Phase 2
+
+1. **Finance atomic reservation** — `findOneAndUpdate + $gte` dalam SATU operasi. Tidak ada read-modify-write. Race condition impossible.
+
+2. **Outbox guarantees** — setiap state change di MongoDB selalu diikuti outbox entry. Publisher deliver ke BullMQ. Crash antara keduanya = re-deliver. BullMQ deduplication via jobId.
+
+3. **Cost recording non-blocking** — `recordLlmInvocation` log error dan return `ok('skipped')`. Task pipeline tidak pernah fail karena cost recording.
+
+4. **Decision timeout atomic** — `findOneAndUpdate` dengan re-check `currentStage = AwaitingUserDecision` dalam satu operasi. Multi-instance safe.
+
+5. **Email failure-safe** — tidak ada `throw` di email service. Semua path return `Result<T,E>`.
+
+6. **SSE implementation** — polling 1s (production akan pakai MongoDB change streams — membutuhkan replica set). Cleanup `clearInterval` on disconnect.
+
+---
+
+## Next Steps (Phase 3+)
+
+- CEO Agent full implementation (BullMQ job handler)
+- Research, Production, QA, Formatting agents
+- SSC IT Agent (provisioning worker)
+- Real-time SSE via MongoDB change streams (replica set)
+- Webhook delivery untuk task completion
+- Dashboard UI (Next.js / Nuxt)
+- MCP Plugin pillar
+- SDK pillar (TypeScript SDK untuk developers)
+
+---
+
+*Phase 2 implementation selesai: 2026-05-03.*
+*Total packages: 12 packages + 2 pillars + 1 core layer.*

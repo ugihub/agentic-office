@@ -1,0 +1,57 @@
+# Bureau API Server — multi-stage build
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/shared-kernel/package.json ./packages/shared-kernel/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/models/package.json ./packages/models/
+COPY packages/auth/package.json ./packages/auth/
+COPY packages/telemetry/package.json ./packages/telemetry/
+COPY packages/infra-mongo/package.json ./packages/infra-mongo/
+COPY packages/infra-messaging/package.json ./packages/infra-messaging/
+COPY packages/cost-analytics/package.json ./packages/cost-analytics/
+COPY packages/agents-core/package.json ./packages/agents-core/
+COPY packages/task-machine/package.json ./packages/task-machine/
+COPY core/package.json ./core/
+COPY pillars/api-server/package.json ./pillars/api-server/
+RUN pnpm install --frozen-lockfile --prod=false
+
+# Build all packages
+FROM deps AS builder
+COPY tsconfig.base.json ./
+COPY packages/ ./packages/
+COPY core/ ./core/
+COPY pillars/api-server/ ./pillars/api-server/
+RUN pnpm --filter "@bureau/shared-kernel" build && \
+    pnpm --filter "@bureau/contracts" build && \
+    pnpm --filter "@bureau/models" build && \
+    pnpm --filter "@bureau/auth" build && \
+    pnpm --filter "@bureau/telemetry" build && \
+    pnpm --filter "@bureau/infra-mongo" build && \
+    pnpm --filter "@bureau/infra-messaging" build && \
+    pnpm --filter "@bureau/cost-analytics" build && \
+    pnpm --filter "@bureau/agents-core" build && \
+    pnpm --filter "@bureau/task-machine" build && \
+    pnpm --filter "@bureau/core" build && \
+    pnpm --filter "@bureau/api-server" build
+
+# Runtime image
+FROM node:20-alpine AS runner
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/core ./core
+COPY --from=builder /app/pillars/api-server/dist ./pillars/api-server/dist
+COPY --from=builder /app/pillars/api-server/package.json ./pillars/api-server/
+
+EXPOSE 3001
+USER node
+CMD ["node", "pillars/api-server/dist/server.js"]

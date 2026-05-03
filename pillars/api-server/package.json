@@ -1,0 +1,39 @@
+{
+  "name": "@bureau/api-server",
+  "version": "0.1.0",
+  "description": "Bureau API server — Fastify 5 with all endpoints",
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "dev": "node --watch dist/server.js",
+    "test": "vitest run --coverage",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@bureau/shared-kernel": "workspace:*",
+    "@bureau/contracts": "workspace:*",
+    "@bureau/models": "workspace:*",
+    "@bureau/auth": "workspace:*",
+    "@bureau/telemetry": "workspace:*",
+    "@bureau/infra-mongo": "workspace:*",
+    "@bureau/infra-messaging": "workspace:*",
+    "@bureau/cost-analytics": "workspace:*",
+    "@bureau/core": "workspace:*",
+    "@bureau/task-machine": "workspace:*",
+    "@upstash/ratelimit": "^1.0.0",
+    "@upstash/redis": "^1.0.0",
+    "fastify": "^5.0.0",
+    "@fastify/cors": "^9.0.0",
+    "@fastify/helmet": "^11.0.0",
+    "@fastify/rate-limit": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@bureau/workers",
+  "version": "0.1.0",
+  "description": "Bureau background workers — outbox publisher, decision timeout, notifications",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "dev": "node --watch dist/index.js",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@bureau/shared-kernel": "workspace:*",
+    "@bureau/contracts": "workspace:*",
+    "@bureau/models": "workspace:*",
+    "@bureau/telemetry": "workspace:*",
+    "@bureau/infra-mongo": "workspace:*",
+    "@bureau/infra-messaging": "workspace:*",
+    "mongoose": "^8.0.0",
+    "resend": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

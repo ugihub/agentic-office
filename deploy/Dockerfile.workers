@@ -1,0 +1,41 @@
+# Bureau Workers — multi-stage build
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+FROM base AS deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/shared-kernel/package.json ./packages/shared-kernel/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/models/package.json ./packages/models/
+COPY packages/telemetry/package.json ./packages/telemetry/
+COPY packages/infra-mongo/package.json ./packages/infra-mongo/
+COPY packages/infra-messaging/package.json ./packages/infra-messaging/
+COPY pillars/workers/package.json ./pillars/workers/
+RUN pnpm install --frozen-lockfile --prod=false
+
+FROM deps AS builder
+COPY tsconfig.base.json ./
+COPY packages/ ./packages/
+COPY pillars/workers/ ./pillars/workers/
+RUN pnpm --filter "@bureau/shared-kernel" build && \
+    pnpm --filter "@bureau/contracts" build && \
+    pnpm --filter "@bureau/models" build && \
+    pnpm --filter "@bureau/telemetry" build && \
+    pnpm --filter "@bureau/infra-mongo" build && \
+    pnpm --filter "@bureau/infra-messaging" build && \
+    pnpm --filter "@bureau/workers" build
+
+FROM node:20-alpine AS runner
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/pillars/workers/dist ./pillars/workers/dist
+COPY --from=builder /app/pillars/workers/package.json ./pillars/workers/
+
+USER node
+CMD ["node", "pillars/workers/dist/index.js"]

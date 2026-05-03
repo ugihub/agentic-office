@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../../packages/shared-kernel" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/models" },
+    { "path": "../../packages/auth" },
+    { "path": "../../packages/telemetry" },
+    { "path": "../../packages/infra-mongo" },
+    { "path": "../../packages/infra-messaging" },
+    { "path": "../../packages/cost-analytics" },
+    { "path": "../../core" },
+    { "path": "../../packages/task-machine" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
