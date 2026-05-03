@@ -702,18 +702,403 @@ Dockerfiles: `deploy/Dockerfile.api-server`, `deploy/Dockerfile.workers`
 
 ---
 
-## Next Steps (Phase 3+)
+## Next Steps (Phase 5+)
 
-- CEO Agent full implementation (BullMQ job handler)
-- Research, Production, QA, Formatting agents
-- SSC IT Agent (provisioning worker)
-- Real-time SSE via MongoDB change streams (replica set)
-- Webhook delivery untuk task completion
-- Dashboard UI (Next.js / Nuxt)
-- MCP Plugin pillar
-- SDK pillar (TypeScript SDK untuk developers)
+- MCP Plugin pillar (Pilar 1: `@bureau/mcp-server`)
+- Fastify API Server full implementation (Pilar 2: billing, all endpoints)
+- Docker self-host one-click deploy (Pilar 3)
+- TypeScript SDK (`@bureau/sdk`) dengan streaming support
+- User provider key encryption AES-256-GCM
+- API key portal
+- ADR lengkap untuk semua keputusan arsitektur (ADR-002 s/d ADR-006)
+- Dashboard UI (Next.js App Router)
+- MongoDB Change Streams untuk SSE real-time
 
 ---
 
 *Phase 2 implementation selesai: 2026-05-03.*
 *Total packages: 12 packages + 2 pillars + 1 core layer.*
+
+---
+
+## Phase 3 — Core Execution Agents
+
+**Tanggal:** 2026-05-03
+**Fase:** Phase 3 — Research, Production, QA, Marketing Agents + Graceful Shutdown
+
+---
+
+### Agents yang Ditambahkan
+
+#### `core/src/agents/core/` — Core Execution Agents
+
+**`project-manager.ts`** — Dekomposisi task berdasarkan pathType
+
+```typescript
+// Membaca executionPath dari AgentContext
+// Fast path:     5 divisions (Executive, Finance, Production, Compliance, Marketing)
+// Standard path: 8 divisions (+ HR, IT, QA)
+// Full path:     9 divisions (+ Research)
+// PM tidak pernah memanggil LLM — pure routing agent
+function decomposeTask(taskId, executionPath): DecomposedPlan
+```
+
+**Highlights:**
+- Setiap division punya `mustRunBefore` dan `canRunParallelWith` untuk dependency tracking
+- Finance selalu di priority < Production (budget check tidak bisa skip)
+- Fast path tidak punya Research dalam stage sequence
+
+---
+
+**`research-agent.ts`** — Scatter pattern, 3 workers paralel
+
+```typescript
+// Pattern: Scatter → Gather → Rerank
+// Workers:
+//   WebSearchWorker      — external web search
+//   KnowledgeBaseWorker  — internal vector KB lookup
+//   EmbeddingWorker      — semantic similarity reranking
+//
+// Fast path: skip otomatis (return skipped=true)
+// Full/Standard: web + KB in parallel → rerank dengan embeddings
+```
+
+**Highlights:**
+- Web search dan KB search berjalan parallel (p-limit concurrency=3)
+- Embedding rerank optional — kalau gagal, lanjut dengan raw results
+- Worker failure non-fatal: `log.warn + continue` bukan `return err`
+- Aggregated hasil: top 10 sources dengan confidence score
+
+---
+
+**`production-agent.ts`** — Pool + Semaphore + ChunkWorker + Escalation
+
+```typescript
+// ChunkWorker flow:
+//   1. Record llmInvoked=false SEBELUM call (cost tracking even on failure)
+//   2. Execute LLM call
+//   3. Record llmInvoked=true SETELAH call
+//
+// Escalation: attemptNumber menentukan model dari escalationChain
+//   Attempt 1 → escalationChain[0] (economy)
+//   Attempt 2 → escalationChain[1] (standard)
+//   Attempt 3 → escalationChain[2] (premium)
+//
+// AttemptReason: 'initial' | 'qa_escalation' | 'stall_requeue' | 'user_retry'
+```
+
+**Highlights:**
+- `llmInvoked` flag dua tahap: false sebelum call → true setelah (even on throw)
+- Prompt di-chunk otomatis di paragraph boundaries jika > 2000 chars
+- Max 3 chunks paralel via p-limit semaphore
+- `MaxRetriesExceededError` kalau `escalationChain` habis
+
+---
+
+**`qa-agent.ts`** — Gate pattern, fast vs full path
+
+```typescript
+// Fast path:     SchemaValidator only (1 validator)
+// Full path:     SchemaValidator + CompletenessChecker + RelevanceChecker (3, paralel)
+//
+// QA failure payload:
+// { passed: false, failureReasons: [...], recommendations: [...], escalationRecommended: true, recommendedTier: 'standard' }
+//
+// Max retries = 3:
+//   Attempt < maxRetries: return ok(qaOutput) dengan passed=false
+//   Attempt = maxRetries:  return err(MaxRetriesExceededError)
+```
+
+**Highlights:**
+- Failure reason eksplisit diteruskan ke Production untuk targeted improvement
+- Escalation tier recommendation: `economy` → `standard` → `premium`
+- Heuristic validators built-in (tidak butuh LLM untuk basic QA)
+- LLM-based completeness + relevance check tersedia via dependency injection
+
+---
+
+**`marketing-agent.ts`** — Sequential pipeline
+
+```typescript
+// Pipeline (berurutan — ORDER MATTERS):
+//   Step 1: FormatterWorker  — format + polish content
+//   Step 2: CitationWorker   — inject research source citations
+//   Step 3: DeliveryWorker   — package final output, call delivery hook
+//
+// Marketing TIDAK memanggil LLM — pure data transformation
+// Delivery hook failure: non-fatal (log + continue)
+```
+
+**Highlights:**
+- Citation injection: inject `## Sources` section untuk markdown format
+- `outputQuality` field: `'standard'` atau `'best_effort'` (dari AwaitingUserDecision)
+- DeliveryWorker menerima optional `deliverFn` untuk webhook/email hook
+
+---
+
+### Graceful Shutdown (`packages/agents-core/src/graceful-shutdown.ts`)
+
+```typescript
+// Single-file shutdown manager:
+registerCleanupHandler('mongodb', () => disconnectMongo())
+registerCleanupHandler('redis', () => redis.quit())
+registerCleanupHandler('bullmq-workers', () => Promise.all(workers.map(w => w.close())))
+
+installGracefulShutdown({ drainTimeoutMs: 30000 })
+// → SIGTERM/SIGINT → abort root AbortController → run cleanup handlers → exit 0
+```
+
+**Highlights:**
+- Root `AbortController` di-abort saat SIGTERM → semua agent di-signal cancel
+- `createTaskAbortController(taskSignal?)` — child controller yang listen ke both root + task cancel
+- `isShuttingDown()` — untuk health probes
+- `api-server` dan `workers` diupdate untuk menggunakan `installGracefulShutdown`
+
+---
+
+### Unit Tests Phase 3
+
+| File | Tests | Coverage Target |
+|---|---|---|
+| `core/src/__tests__/project-manager.test.ts` | 6 tests | fast/standard/full paths, Finance priority |
+| `core/src/__tests__/qa-agent.test.ts` | 7 tests | schema validation, fast/full path, max retries |
+
+---
+
+### Checklist Phase 3 — Status
+
+| Item | Status |
+|---|---|
+| Project Manager Agent — decompose by pathType | ✅ |
+| Research Agent — scatter, 3 workers parallel, reranking | ✅ |
+| QA Agent — gate, lightweight fast path, escalation trigger full path | ✅ |
+| QA rejection dengan failure reason + escalation recommendation | ✅ |
+| Production Agent — pool + semaphore, attemptReason tracking | ✅ |
+| ChunkWorker — llmInvoked=false sebelum call, true setelah | ✅ CRITICAL |
+| Marketing Agent — pipeline berurutan (formatter→citation→delivery) | ✅ |
+| AbortController propagation di semua agents | ✅ |
+| SIGTERM handler via installGracefulShutdown | ✅ |
+| api-server + workers diupdate untuk graceful shutdown | ✅ |
+
+---
+
+## Phase 4 — LLM Providers & Smart Routing
+
+**Tanggal:** 2026-05-03
+**Fase:** Phase 4 — LLM Providers, Resilience, Category Cache
+
+---
+
+### Package Baru: `@bureau/llm-providers`
+
+#### Structure
+
+```
+packages/llm-providers/
+├── src/
+│   ├── IModelProvider.ts          # Abstraction (after 2 concrete impls)
+│   ├── pricing.config.ts          # All provider prices (May 2026)
+│   ├── provider-registry.ts       # Routes modelId → provider + middleware
+│   ├── claude/
+│   │   └── index.ts               # ClaudeProvider (Vercel AI SDK)
+│   ├── gemini/
+│   │   └── index.ts               # GeminiProvider (Vercel AI SDK)
+│   ├── cache/
+│   │   └── category-cache.ts      # Category-based TTL cache (Redis)
+│   ├── resilience/
+│   │   └── policies.ts            # Cockatiel retry + circuit-breaker + bulkhead
+│   └── __tests__/
+│       ├── pricing.test.ts
+│       └── category-cache.test.ts
+├── package.json                   # ai, @ai-sdk/anthropic, @ai-sdk/google, cockatiel
+├── tsconfig.json
+└── vitest.config.ts
+```
+
+---
+
+#### `IModelProvider` — Interface Abstraction
+
+```typescript
+interface IModelProvider {
+  readonly info: ProviderInfo
+  generate(model, options): Promise<Result<GenerateResult, Error>>
+  generateStream(model, options): AsyncGenerator<StreamChunk, GenerateResult>
+  supportsModel(modelId): boolean
+}
+
+interface GenerateResult {
+  text, tokensIn, tokensOut, cachedTokens, costUsd, modelUsed, finishReason
+}
+```
+
+**Pattern:** Abstraction ditemukan SETELAH dua concrete implementation (Claude + Gemini). Sesuai prinsip plan.
+
+---
+
+#### `ClaudeProvider` — Anthropic via Vercel AI SDK
+
+```typescript
+// Models: claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-6
+// Features: prompt caching (cachedTokens dari providerMetadata), streaming, AbortSignal
+// API key: ANTHROPIC_API_KEY env var
+```
+
+**Highlights:**
+- `experimental_providerMetadata.anthropic.cacheReadInputTokens` → cachedTokens
+- Streaming via Vercel AI SDK `streamText`
+- `finishReason` mapped ke union type
+
+---
+
+#### `GeminiProvider` — Google via Vercel AI SDK
+
+```typescript
+// Models: gemini-2.5-flash-lite, gemini-2.5-flash, gemini-2.5-pro
+// Note: cachedTokens always 0 (Gemini tidak expose via Vercel SDK)
+// API key: GEMINI_API_KEY env var
+```
+
+---
+
+#### `pricing.config.ts` — Model Pricing Registry
+
+| Provider | Model | Input/1M | Output/1M | Tier |
+|---|---|---|---|---|
+| Anthropic | claude-haiku-4-5 | $1.00 | $5.00 | economy |
+| Anthropic | claude-sonnet-4-6 | $3.00 | $15.00 | standard |
+| Anthropic | claude-opus-4-6 | $5.00 | $25.00 | premium |
+| Google | gemini-2.5-flash-lite | $0.10 | $0.40 | economy |
+| Google | gemini-2.5-flash | $0.30 | $2.50 | economy |
+| Google | gemini-2.5-pro | $1.25 | $10.00 | standard |
+| OpenAI | gpt-5 | $1.25 | $10.00 | premium |
+| DeepSeek | deepseek-v3-2 | $0.28 | $0.42 | economy |
+| Mistral | mistral-medium-3 | $0.40 | $2.00 | standard |
+| Qwen | qwen-2.5-7b | $0.30 | $0.80 | economy |
+| Kimi | kimi-k2-5 | $0.60 | $2.50 | standard |
+
+Constants:
+- `SPENDING_ANOMALY_MULTIPLIER = 3.0` — alert kalau cost 3x rolling average
+- `COST_DEVIATION_ALERT_THRESHOLD = 0.20` — alert kalau cost ±20% dari baseline
+
+---
+
+#### `resilience/policies.ts` — Cockatiel Policies
+
+```typescript
+// 3 lapisan policy (dicompose):
+//   Bulkhead      → max concurrent calls per provider (default: MAX_LLM_CONCURRENCY=3)
+//   CircuitBreaker → open setelah 5 consecutive failures, reset setelah 30s
+//   Retry          → exponential backoff (1s, 2s, 4s ... max 30s), max 3 attempts
+
+const policy = createLlmPolicy('anthropic')
+const result = await policy.execute(() => claudeProvider.generate(model, opts))
+
+// Circuit breaker: singleton per provider (cached)
+// Bulkhead: singleton per provider (cached)
+// getCircuitBreakerState(provider) → 'closed' | 'open' | 'halfOpen' | 'unknown'
+```
+
+**Retryable errors:**
+- Rate limit (429), Server error (500/502/503/504)
+- Timeout, ECONNRESET, ECONNREFUSED
+
+---
+
+#### `cache/category-cache.ts` — Category-Based TTL Cache
+
+```typescript
+// SYSTEM_FLOOR_TTL (hard minimum — cannot override):
+// { financial: 0, temporal: 60, personnel: 3600, inventory: 300, default: 3600 }
+
+// TENANT_MAX_TTL (hard maximum — tenant can customize within):
+// { financial: 0, temporal: 600, personnel: 86400, inventory: 3600, default: 604800 }
+
+// Classifier (regex-based, tidak ada LLM call):
+classifyCacheCategory('harga bitcoin') → 'financial' → TTL=0 (never cache)
+classifyCacheCategory('CEO siapa')     → 'personnel' → TTL>=3600
+classifyCacheCategory('stok tersedia') → 'inventory' → TTL>=300
+```
+
+**Highlights:**
+- Financial TTL=0 adalah hard constraint — tidak bisa di-override tenant
+- Cache key: `sha256(model + prompt)` dipotong 32 hex chars
+- Cache failure non-fatal: `log.warn + return null`
+
+---
+
+#### `ProviderRegistry` — Routing + Middleware
+
+```typescript
+const registry = new ProviderRegistry(categoryCache)
+registry.register(new ClaudeProvider())
+registry.register(new GeminiProvider())
+
+// Every call goes through:
+//   1. Cache get (skip financial automatically)
+//   2. Resolve provider by modelId
+//   3. Execute with Cockatiel policy
+//   4. Cache set on success
+
+// Fallback chain:
+registry.generateWithFallback('claude-sonnet-4-6', ['gemini-2.5-pro'], options)
+// → tries primary, if circuit open → tries fallbacks in order
+```
+
+---
+
+### Unit Tests Phase 4
+
+| File | Tests | Coverage Target |
+|---|---|---|
+| `llm-providers/src/__tests__/pricing.test.ts` | 7 tests | cost estimation, model registry |
+| `llm-providers/src/__tests__/category-cache.test.ts` | 10 tests | classification, TTL bounds, financial=0 |
+
+---
+
+### Checklist Phase 4 — Status
+
+| Item | Status |
+|---|---|
+| `ClaudeProvider` — concrete, Vercel AI SDK, streaming, prompt caching | ✅ |
+| `GeminiProvider` — concrete, Vercel AI SDK, streaming | ✅ |
+| `IModelProvider` — abstraction setelah dua concrete impl | ✅ |
+| `pricing.config.ts` — semua provider + alert threshold 20% | ✅ CRITICAL |
+| Cockatiel: retry eksponensial + circuit breaker + bulkhead | ✅ |
+| Category-based TTL cache (SYSTEM_FLOOR_TTL + TENANT_MAX_TTL) | ✅ CRITICAL |
+| Financial prompt TTL=0 — hard constraint, tidak bisa di-override | ✅ CRITICAL |
+| `ProviderRegistry` — routing + cache middleware + fallback chain | ✅ |
+| Unit tests pricing + category-cache | ✅ |
+
+---
+
+## Poin Kritis Phase 3-4
+
+1. **llmInvoked flag dua tahap** — `false` sebelum LLM call, `true` setelah. Ensures cost_analytics akurat even kalau call throws di tengah.
+
+2. **Financial TTL=0 adalah runtime assertion** — `classifyCacheCategory` jalan di setiap request. Bukan hanya di tests. Kalau financial prompt masuk cache, itu billing bug.
+
+3. **ChunkWorker recordCostFn non-blocking** — cost recording failure catch + swallow. Task pipeline tidak pernah fail karena cost tracking.
+
+4. **QA failure reason propagation** — QA mengembalikan `failureReasons[]` dan `recommendedTier`. Production menggunakan ini untuk targeted improvement di attempt berikutnya.
+
+5. **Cockatiel policy singleton per provider** — circuit breaker dan bulkhead di-share across requests. Tidak ada per-request policy creation. State persistent dalam satu process.
+
+6. **Fallback chain provider** — `ProviderRegistry.generateWithFallback()` tries primary, jika circuit open tries fallbacks. Tidak ada silent fallback — `usedFallback: true` selalu di-flag di response.
+
+---
+
+## Next Steps (Phase 5)
+
+Phase 5 — Three Distribution Pillars:
+- `@bureau/mcp-server` — MCP stdio protocol, npx-able
+- `@bureau/api-server` — full Fastify dengan billing + semua endpoints dari spec
+- Docker self-host one-click (Railway/Render)
+- `@bureau/sdk` — TypeScript client dengan streaming support
+- AES-256-GCM encryption untuk user provider keys
+- ADR-002 sampai ADR-006
+
+---
+
+*Phase 3-4 implementation selesai: 2026-05-03.*
+*Total packages: 13 packages + 2 pillars + 1 core layer (tambahan: @bureau/llm-providers).*

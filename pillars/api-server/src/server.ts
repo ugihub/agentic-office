@@ -17,6 +17,10 @@ import rateLimit from '@fastify/rate-limit'
 import mongoose from 'mongoose'
 import { createLogger } from '@bureau/telemetry'
 import { initJwtKeys } from '@bureau/auth'
+import {
+  installGracefulShutdown,
+  registerCleanupHandler,
+} from '@bureau/agents-core'
 import authPlugin from './middleware/auth.js'
 import { healthRoutes } from './routes/health.js'
 import { taskRoutes } from './routes/tasks.js'
@@ -135,22 +139,20 @@ async function initAuth(): Promise<void> {
 function setupGracefulShutdown(
   fastify: Awaited<ReturnType<typeof buildServer>>,
 ): void {
-  const shutdown = async (signal: string) => {
-    log.info({ signal }, 'Shutdown signal received')
-    try {
-      await fastify.close()
-      log.info({}, 'Fastify closed — draining connections')
-      await mongoose.disconnect()
-      log.info({}, 'MongoDB disconnected')
-      process.exit(0)
-    } catch (err) {
-      log.error({ err }, 'Error during shutdown')
-      process.exit(1)
-    }
-  }
+  // Register cleanup in shutdown order
+  registerCleanupHandler('fastify', async () => {
+    await fastify.close()
+    log.info({}, 'Fastify closed — all in-flight requests drained')
+  })
+  registerCleanupHandler('mongodb', async () => {
+    await mongoose.disconnect()
+    log.info({}, 'MongoDB disconnected')
+  })
 
-  process.on('SIGTERM', () => { void shutdown('SIGTERM') })
-  process.on('SIGINT', () => { void shutdown('SIGINT') })
+  installGracefulShutdown({
+    drainTimeoutMs: parseInt(process.env['SHUTDOWN_DRAIN_MS'] ?? '30000', 10),
+    log: (msg, meta) => log.info(meta ?? {}, msg),
+  })
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

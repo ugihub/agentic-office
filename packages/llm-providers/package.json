@@ -1,0 +1,48 @@
+{
+  "name": "@bureau/llm-providers",
+  "version": "0.1.0",
+  "description": "Bureau LLM provider implementations — Claude, Gemini, and IModelProvider abstraction",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./pricing": {
+      "types": "./dist/pricing.config.d.ts",
+      "import": "./dist/pricing.config.js"
+    },
+    "./cache": {
+      "types": "./dist/cache/category-cache.d.ts",
+      "import": "./dist/cache/category-cache.js"
+    },
+    "./resilience": {
+      "types": "./dist/resilience/policies.d.ts",
+      "import": "./dist/resilience/policies.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@bureau/shared-kernel": "workspace:*",
+    "@bureau/telemetry": "workspace:*",
+    "ai": "^3.4.0",
+    "@ai-sdk/anthropic": "^0.0.46",
+    "@ai-sdk/google": "^0.0.46",
+    "cockatiel": "^3.1.0",
+    "ioredis": "^5.3.0",
+    "decimal.js": "^10.4.3"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0"
+  }
+}

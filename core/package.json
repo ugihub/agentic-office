@@ -21,6 +21,10 @@
     "./agents/csuite": {
       "types": "./dist/agents/csuite/index.d.ts",
       "import": "./dist/agents/csuite/index.js"
+    },
+    "./agents/core": {
+      "types": "./dist/agents/core/index.d.ts",
+      "import": "./dist/agents/core/index.js"
     }
   },
   "scripts": {
@@ -35,7 +39,8 @@
     "@bureau/contracts": "workspace:*",
     "@bureau/agents-core": "workspace:*",
     "@bureau/telemetry": "workspace:*",
-    "@bureau/models": "workspace:*"
+    "@bureau/models": "workspace:*",
+    "p-limit": "^6.1.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.0.0",
