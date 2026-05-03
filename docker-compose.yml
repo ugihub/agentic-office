@@ -1,0 +1,122 @@
+version: '3.9'
+
+# Bureau — Local Development Stack
+# ADR-001: RabbitMQ deliberately excluded. BullMQ on Redis handles all messaging.
+
+services:
+  # ── Redis — BullMQ + cache + rate limiting ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: bureau-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MongoDB — Primary datastore (use Atlas M0 for actual dev, this for CI) ──
+  mongo:
+    image: mongo:7.0
+    container_name: bureau-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: bureau
+      MONGO_INITDB_ROOT_PASSWORD: bureau_secret
+      MONGO_INITDB_DATABASE: bureau
+    volumes:
+      - mongo-data:/data/db
+      - ./deploy/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Jaeger — Distributed tracing (OpenTelemetry) ────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: bureau-jaeger
+    restart: unless-stopped
+    ports:
+      - '16686:16686'   # Jaeger UI
+      - '4317:4317'     # OTLP gRPC
+      - '4318:4318'     # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: 'false'
+      BADGER_DIRECTORY_VALUE: /badger/data
+      BADGER_DIRECTORY_KEY: /badger/key
+    volumes:
+      - jaeger-data:/badger
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:14269/']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Prometheus — Metrics collection ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: bureau-prometheus
+    restart: unless-stopped
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:9090/-/healthy']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Grafana — Metrics dashboards ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: bureau-grafana
+    restart: unless-stopped
+    ports:
+      - '3001:3000'
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: bureau_grafana
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
+  mongo-data:
+  jaeger-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  default:
+    name: bureau-network
