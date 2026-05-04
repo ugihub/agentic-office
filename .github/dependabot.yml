@@ -1,0 +1,86 @@
+version: 2
+updates:
+  # ─── pnpm (Node.js packages) ───────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      # Group minor/patch updates to reduce PR noise
+      otel:
+        patterns:
+          - "@opentelemetry/*"
+        update-types:
+          - minor
+          - patch
+      bullmq:
+        patterns:
+          - "bullmq"
+          - "ioredis"
+        update-types:
+          - minor
+          - patch
+      vercel-ai:
+        patterns:
+          - "ai"
+          - "@ai-sdk/*"
+        update-types:
+          - minor
+          - patch
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - minor
+          - patch
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "@typescript-eslint/*"
+          - "eslint"
+          - "prettier"
+        update-types:
+          - minor
+          - patch
+    # Never auto-merge major version bumps
+    ignore:
+      - dependency-name: "xstate"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mongoose"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastify"
+        update-types: ["version-update:semver-major"]
+
+  # ─── GitHub Actions ────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+
+  # ─── Docker base images ────────────────────────────────────────────────────
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "09:00"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker

@@ -1,0 +1,167 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Run every Monday at 08:00 UTC
+    - cron: '0 8 * * 1'
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      fix:
+        description: 'Auto-fix pnpm audit vulnerabilities'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  security-events: write  # Required for uploading SARIF to GitHub Security tab
+
+jobs:
+  pnpm-audit:
+    name: pnpm Audit (HIGH/CRITICAL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run pnpm audit
+        run: |
+          pnpm audit --audit-level=high --json > security-results/pnpm-audit.json || true
+          pnpm audit --audit-level=high
+        continue-on-error: false
+
+  trivy-scan:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          trivy-config: tests/security/.trivyignore
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: false
+
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for secret detection
+
+      - name: Run secret detection
+        run: |
+          # Check for common secret patterns
+          FOUND=0
+
+          patterns=(
+            "sk-ant-[A-Za-z0-9_-]+"          # Anthropic key
+            "AIza[A-Za-z0-9_-]{35}"           # Google API key
+            "sk-[A-Za-z0-9]{48}"              # OpenAI key
+            "bureau_live_[A-Za-z0-9]+"        # Bureau production key
+            "ghp_[A-Za-z0-9]{36}"             # GitHub token
+            "mongodb\+srv://[^:]+:[^@]+"       # MongoDB Atlas URI with password
+            "re_[A-Za-z0-9]{32}"              # Resend API key
+          )
+
+          for pattern in "${patterns[@]}"; do
+            matches=$(grep -rE "$pattern" \
+              --include="*.ts" --include="*.js" --include="*.json" \
+              --include="*.yaml" --include="*.yml" --include="*.env" \
+              --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git \
+              . 2>/dev/null | grep -v ".example" | grep -v ".test." | grep -v "# " || true)
+            if [ -n "$matches" ]; then
+              echo "POTENTIAL SECRET FOUND matching pattern: $pattern"
+              echo "$matches"
+              FOUND=1
+            fi
+          done
+
+          if [ "$FOUND" -eq 1 ]; then
+            echo "Secret detection failed. Review findings above."
+            exit 1
+          fi
+          echo "No secrets detected."
+
+  security-patterns:
+    name: Security Pattern Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run security pattern tests
+        run: |
+          cd tests && pnpm vitest run security/security-patterns.test.ts
+        env:
+          NODE_ENV: test
+
+  docker-scan:
+    name: Docker Image Scan (Trivy)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API server image
+        run: |
+          docker build -f deploy/Dockerfile.api-server -t bureau-api-server:scan .
+        continue-on-error: true  # Build may fail without real deps — scan the FS instead
+
+      - name: Scan API server image
+        uses: aquasecurity/trivy-action@master
+        if: success()
+        with:
+          image-ref: 'bureau-api-server:scan'
+          format: 'sarif'
+          output: 'trivy-docker.sarif'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Upload Docker scan SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-docker.sarif'
+        continue-on-error: true

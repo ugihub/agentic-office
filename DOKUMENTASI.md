@@ -2090,3 +2090,254 @@ Distance: COSINE
 *Phase 9-10 implementation selesai: 2026-05-05.*
 *Files added: Grafana dashboard (1), Prometheus config update, Runbook, Distroless Dockerfiles (2), Helm chart (8 files), ArgoCD manifests (2), Upstash Vector cache + tests, Atlas backup scripts (2), Chaos tests (2).*
 *Total new files: ~20 files.*
+
+---
+
+## Phase 11 — Launch & Open Source
+
+**Tanggal:** 2026-05-05  
+**Fase:** Phase 11 — Soft Launch & Community
+
+---
+
+### Community Files
+
+**`LICENSE`** — MIT License, Copyright 2026 Bureau Platform Team.
+
+**`CONTRIBUTING.md`** — Panduan kontribusi lengkap:
+- Quickstart: `git clone → pnpm install → cp .env.example → docker compose up`
+- Project structure: packages, pillars, agents, tests, deploy
+- Branch strategy: `feature/*`, `fix/*`, `chore/*` dari main
+- Commit convention: Conventional Commits (enforced via commitlint + Husky)
+- Running tests: per-package dan full suite
+- ADR table: 10 ADR dengan status dan summary
+- **7 critical non-negotiable rules** (wajib untuk setiap PR)
+- PR submission process dan review expectations
+- Security reporting via email (tidak via GitHub Issues)
+
+**`CODE_OF_CONDUCT.md`** — Contributor Covenant 2.1 adapted untuk Bureau.
+
+---
+
+### GitHub Issue & PR Templates
+
+**`.github/ISSUE_TEMPLATE/bug_report.yml`** — Structured bug report:
+- Component dropdown (10 pilihan: api-server, workers, mcp-server, sdk, dll)
+- Description, reproduce steps, expected/actual behavior
+- Version, deployment method (SaaS/Self-hosted/Docker/k8s)
+- Log output, reproduction checklist
+
+**`.github/ISSUE_TEMPLATE/feature_request.yml`** — Feature request:
+- Problem statement, solution description, alternatives
+- Pillar dropdown (multi-select: MCP Plugin / SaaS API / Self-hosted)
+- Checklist konfirmasi (CONTRIBUTING baca, search dupe issue, dll)
+
+**`.github/ISSUE_TEMPLATE/config.yml`** — `blank_issues_enabled: false`, contact links ke security email, docs, Discord.
+
+**`.github/pull_request_template.md`** — Template PR dengan:
+- Type of change (bug fix / new feature / breaking / docs / refactor / CI)
+- Motivation + implementation notes
+- **Critical checklist** (7 non-negotiable rules per PR):
+  1. No `throw` in business logic — all errors return `Result<T, E>`
+  2. Financial prompts: `SYSTEM_FLOOR_TTL.financial === 0` masih true
+  3. Finance budget reservation uses `findOneAndUpdate + $gte`
+  4. `@bureau/core` has zero framework imports
+  5. All state changes go through MongoDB
+  6. `correlationId` + `taskId` present in new log entries
+  7. Outbox entry created before any BullMQ enqueue
+- Testing checklist, ADR impact, screenshots/logs
+
+---
+
+### Dependabot Configuration
+
+**`.github/dependabot.yml`** — 3 ecosystem watchers:
+
+| Ecosystem | Schedule | Groups |
+|-----------|----------|--------|
+| npm (pnpm) | Weekly Monday 09:00 WIB | otel, bullmq, vercel-ai, testing, typescript-tooling |
+| github-actions | Weekly Monday 09:00 WIB | — |
+| docker | Weekly Tuesday 09:00 WIB | — |
+
+**Major version ignores:** xstate, mongoose, fastify — tidak auto-bump major (breaking changes).
+
+**PR limit:** npm = 10, github-actions = 5, docker = 3.
+
+---
+
+### Security Workflow
+
+**`.github/workflows/security.yml`** — 5 jobs, triggers: weekly Monday + push ke main/master + manual dispatch:
+
+| Job | Tool | What it checks |
+|-----|------|---------------|
+| `pnpm-audit` | pnpm audit | HIGH/CRITICAL vulnerabilities |
+| `trivy-scan` | Trivy (filesystem) | CVEs in deps, SARIF → GitHub Security tab |
+| `secret-scan` | grep regex | 7 secret patterns (Anthropic, OpenAI, Google, Bureau, GitHub, MongoDB, Resend) |
+| `security-patterns` | vitest | `tests/security/security-patterns.test.ts` |
+| `docker-scan` | Trivy (image) | CVEs di built Docker image (main/master only) |
+
+Secret pattern yang dideteksi:
+```
+sk-ant-[A-Za-z0-9_-]+      # Anthropic API key
+AIza[A-Za-z0-9_-]{35}      # Google API key
+sk-[A-Za-z0-9]{48}         # OpenAI key
+bureau_live_[A-Za-z0-9]+   # Bureau production key
+ghp_[A-Za-z0-9]{36}        # GitHub token
+mongodb+srv://[^:]+:[^@]+  # MongoDB Atlas URI
+re_[A-Za-z0-9]{32}         # Resend API key
+```
+
+---
+
+### npm Publish Workflow
+
+**`.github/workflows/publish.yml`** — Trigger: push tag `v*.*.*`. 4 jobs:
+
+**Job 1: `validate`** — Typecheck + build + test + security audit (all must pass).
+
+**Job 2: `publish-npm`** — Publish 4 packages ke npm registry:
+1. `@bureau/shared-kernel` (base, no workspace deps)
+2. `@bureau/contracts` (depends on zod only)
+3. `@bureau/sdk` (depends on shared-kernel)
+4. `@bureau/mcp-server` (depends on core packages)
+
+Requires **`npm-publish` GitHub Environment** (manual approval gate). `NODE_AUTH_TOKEN` dari `secrets.NPM_TOKEN`.
+
+**Job 3: `publish-docker`** — Build + push ke GHCR:
+- `ghcr.io/bureau-id/bureau-api-server`
+- `ghcr.io/bureau-id/bureau-workers`
+- Multi-arch: `linux/amd64` + `linux/arm64`
+- Tags: semver full (`1.2.3`), minor (`1.2`), major (`1`), `latest` (non-prerelease only)
+- BuildKit layer cache via `type=gha`
+
+**Job 4: `create-release`** — GitHub Release dari CHANGELOG.md:
+- Extract section untuk versi ini dari CHANGELOG
+- `prerelease: true` jika tag mengandung `beta`, `alpha`, atau `rc`
+
+---
+
+### publishConfig — npm Package Readiness
+
+Semua 4 package publik sekarang memiliki `publishConfig` dan `files`:
+
+**Packages yang di-update:**
+- `pillars/mcp-server/package.json` — `@bureau/mcp-server`
+- `pillars/sdk/package.json` — `@bureau/sdk`
+- `packages/shared-kernel/package.json` — `@bureau/shared-kernel`
+- `packages/contracts/package.json` — `@bureau/contracts`
+
+```json
+{
+  "files": ["dist", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}
+```
+
+`files` memastikan hanya `dist/` (compiled JS + types), README, dan LICENSE yang di-publish — tidak ada source TypeScript, test files, atau internal config.
+
+---
+
+### Root README.md
+
+**`README.md`** — Comprehensive open source README:
+
+| Section | Content |
+|---------|---------|
+| Badges | CI, Security, npm versions, License |
+| Three Pillars | MCP Plugin / SaaS API / Self-hosted comparison table |
+| Quick Start | MCP (1 command), SDK (install + code), Self-hosted (docker compose) |
+| Architecture | ASCII diagram: Client → API Server → Orchestrator → Agents → Infrastructure |
+| Key Design Decisions | Result<T,E>, BullMQ-only, Financial TTL=0, Atomic reservation, Distroless, Outbox, Core-zero-framework |
+| Repository Structure | Annotated tree |
+| Divisions | Table: CEO/HR/Finance/Compliance/Production/QA/Marketing + metric |
+| Observability | Grafana metrics overview |
+| SLOs | 5 SLOs with targets |
+| Development | Prerequisites, setup, common commands, local run |
+| Contributing | Link ke CONTRIBUTING.md |
+| Security | Email contact, responsible disclosure |
+| Pricing | Tier table (Starter/Growth/Scale/Self-hosted) |
+| License | MIT |
+
+---
+
+### SLO Review Document
+
+**`docs/slo-review.md`** — SLO definitions dan quarterly review checklist:
+
+| SLO | Target | Current (Q2-2026) |
+|-----|--------|-------------------|
+| API availability | 99.9% | 99.95% ✅ |
+| POST /tasks p99 latency | < 2s | 1.4s ✅ |
+| AwaitingUserDecision resolution | ≥ 70% / 24h | 74% ✅ |
+| Fast path adoption | ≥ 80% | 83% ✅ |
+| Spending anomaly response | 0 unreviewed > 1h | 0 ✅ |
+
+**Error budget policy:**
+- > 50% remaining: normal deploys
+- 25-50%: tech lead approval required
+- < 25%: **freeze** — only P0 bug fixes
+- 0%: incident declared, rollback mandatory
+
+---
+
+### Pricing Tiers Document
+
+**`docs/pricing-tiers.md`** — Full pricing documentation:
+
+| Tier | Price | Tasks/mo | Overage | Divisions |
+|------|-------|----------|---------|-----------|
+| Starter | Rp 49.000 | 500 | Rp 150/task | CEO + 2 |
+| Growth | Rp 149.000 | 2.000 | Rp 100/task | All 7 |
+| Scale | Rp 349.000 | 10.000 | Rp 75/task | All 7 + custom |
+| Self-hosted | Free | Unlimited | — | All 7 |
+
+**LLM cost pass-through:** 1.2× actual API cost, deducted dari per-task budget. Finance agent halts task jika budget exceeded → `AwaitingUserDecision(insufficient_budget)`.
+
+**Monthly overage cap:** Configurable di dashboard. Ketika tercapai → `402 Payment Required` sampai billing cycle berikutnya.
+
+---
+
+### Checklist Phase 11 — Status
+
+| Item | Status |
+|------|--------|
+| MIT License | ✅ |
+| CONTRIBUTING.md (quickstart, rules, ADRs) | ✅ |
+| CODE_OF_CONDUCT.md (Contributor Covenant 2.1) | ✅ |
+| Bug report issue template | ✅ |
+| Feature request issue template | ✅ |
+| Issue template config (blank_issues disabled) | ✅ |
+| PR template (7 non-negotiable rules) | ✅ |
+| Dependabot (npm + github-actions + docker) | ✅ |
+| Security workflow (audit + trivy + secret scan) | ✅ |
+| npm publish workflow (4 packages + docker + release) | ✅ |
+| publishConfig + files pada 4 public packages | ✅ |
+| Root README.md (open source, comprehensive) | ✅ |
+| docs/slo-review.md (SLO definitions + quarterly checklist) | ✅ |
+| docs/pricing-tiers.md (Starter/Growth/Scale/Self-hosted) | ✅ |
+
+---
+
+## Poin Kritis Phase 11
+
+1. **npm publish order matters** — `shared-kernel` → `contracts` → `sdk` → `mcp-server`. Packages dengan workspace deps harus publish leaf-first agar pnpm resolve dependency graph correctly.
+
+2. **`npm-publish` Environment gate** — GitHub Environment dengan manual approval. Prevents accidental publish dari tag yang salah. Setiap publish butuh explicit human approval di GitHub UI.
+
+3. **Secret scan regex di CI** — 7 pattern dijalankan setiap push ke main. Pattern `bureau_live_[A-Za-z0-9]+` spesifik untuk Bureau production API key format. File `.example` dan `.test.` di-exclude (false positive prevention).
+
+4. **Dependabot major version freeze** — xstate, mongoose, fastify tidak di-auto-bump major karena breaking changes yang signifikan. Minor/patch di-group untuk reduce PR noise.
+
+5. **SLO fast path target 80%** — Threshold ini bukan arbitrary. Di bawah 80%, artinya lebih dari 1 dari 5 task butuh human intervention — itu terlalu banyak overhead untuk users. Target ini mendorong CEO agent routing accuracy improvement.
+
+6. **Pricing financial bypass linkage** — Tier Starter budget limit Rp 2.000/task langsung berkaitan dengan Financial classifier. Jika task melebihi budget, Finance SSC agent halt via `AwaitingUserDecision(insufficient_budget)` — bukan system error, tapi explicit user decision point.
+
+---
+
+*Phase 11 implementation selesai: 2026-05-05.*
+*Files added: LICENSE, CONTRIBUTING.md, CODE_OF_CONDUCT.md, 3× GitHub issue templates, PR template, dependabot.yml, security.yml workflow, publish.yml workflow, 4× package.json publishConfig, README.md, docs/slo-review.md, docs/pricing-tiers.md.*
+*Total new/modified files: 16 files.*

@@ -1,0 +1,201 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'   # Trigger on semantic version tags: v1.0.0, v1.2.3-beta.1
+
+permissions:
+  contents: read
+  packages: write  # For GitHub Packages / GHCR
+
+jobs:
+  validate:
+    name: Validate before publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+        env:
+          NODE_ENV: test
+
+      - name: Security audit
+        run: pnpm audit --audit-level=high
+
+  publish-npm:
+    name: Publish to npm registry
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: npm-publish  # Requires manual approval in GitHub Environments
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Update package versions
+        run: |
+          # Update version in all publishable packages to match tag
+          VERSION="${{ steps.version.outputs.version }}"
+          pnpm --filter "@bureau/mcp-server" exec npm version "$VERSION" --no-git-tag-version
+          pnpm --filter "@bureau/sdk" exec npm version "$VERSION" --no-git-tag-version
+          pnpm --filter "@bureau/shared-kernel" exec npm version "$VERSION" --no-git-tag-version
+          pnpm --filter "@bureau/contracts" exec npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish @bureau/shared-kernel
+        run: pnpm --filter "@bureau/shared-kernel" publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @bureau/contracts
+        run: pnpm --filter "@bureau/contracts" publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @bureau/sdk
+        run: pnpm --filter "@bureau/sdk" publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @bureau/mcp-server
+        run: pnpm --filter "@bureau/mcp-server" publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-docker:
+    name: Build & Push Docker images to GHCR
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for Docker
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/bureau-id/bureau-api-server
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
+
+      - name: Build and push API server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.api-server
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Extract metadata for Workers image
+        id: meta-workers
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/bureau-id/bureau-workers
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
+
+      - name: Build and push Workers image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.workers
+          push: true
+          tags: ${{ steps.meta-workers.outputs.tags }}
+          labels: ${{ steps.meta-workers.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  create-release:
+    name: Create GitHub Release
+    needs: [publish-npm, publish-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes from CHANGELOG
+        id: release-notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract section for this version from CHANGELOG.md if it exists
+          if [ -f CHANGELOG.md ]; then
+            # Extract between this version header and the next
+            awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > release_notes.txt
+          else
+            echo "Release $GITHUB_REF_NAME" > release_notes.txt
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.txt
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
