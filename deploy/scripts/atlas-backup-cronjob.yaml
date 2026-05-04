@@ -1,0 +1,71 @@
+# Kubernetes CronJob — Bureau MongoDB Atlas Backup
+# Runs daily at 02:00 UTC, creates on-demand snapshot and verifies integrity
+#
+# Prerequisites:
+#   kubectl create secret generic atlas-credentials \
+#     --from-literal=ATLAS_PROJECT_ID=<project_id>
+#
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bureau-atlas-backup
+  namespace: bureau
+  labels:
+    app.kubernetes.io/name: bureau-atlas-backup
+    app.kubernetes.io/component: backup
+spec:
+  # Daily at 02:00 UTC (low-traffic window)
+  schedule: "0 2 * * *"
+  # Keep last 3 successful job records
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  # Do not run concurrent backups
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      # Retry once on failure
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          containers:
+            - name: backup
+              # Use Atlas CLI image or custom image with atlas + bash
+              image: ghcr.io/bureau-id/bureau-tools:latest
+              command:
+                - bash
+                - /scripts/atlas-backup.sh
+                - scheduled
+              env:
+                - name: ATLAS_PROJECT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: atlas-credentials
+                      key: ATLAS_PROJECT_ID
+                - name: ATLAS_CLUSTER_NAME
+                  value: bureau-cluster
+                - name: RESULTS_DIR
+                  value: /tmp/backup-results
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "256Mi"
+          volumes:
+            - name: scripts
+              configMap:
+                name: bureau-backup-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir: {}

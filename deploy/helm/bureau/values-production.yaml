@@ -1,0 +1,56 @@
+# Production environment overrides
+# Usage: helm upgrade bureau ./deploy/helm/bureau -f deploy/helm/bureau/values-production.yaml
+
+global:
+  imageTag: "1.0.0"  # Pin to specific release tag in production
+
+apiServer:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "1Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: api.bureau.id
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: bureau-api-tls
+        hosts:
+          - api.bureau.id
+
+workers:
+  replicaCount: 4
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "1Gi"
+    limits:
+      cpu: "4000m"
+      memory: "2Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 4
+    maxReplicas: 40
+
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 15s
+  labels:
+    release: kube-prometheus-stack

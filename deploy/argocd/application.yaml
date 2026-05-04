@@ -1,0 +1,104 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bureau
+  namespace: argocd
+  # Cascade delete — removing this Application deletes all owned resources
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: bureau
+    app.kubernetes.io/part-of: bureau-platform
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/bureau-id/bureau
+    targetRevision: HEAD
+    path: deploy/helm/bureau
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-production.yaml
+      # Image tag is set via ArgoCD Image Updater annotation (see below)
+      parameters: []
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bureau
+
+  syncPolicy:
+    automated:
+      prune: true        # Remove resources no longer in chart
+      selfHeal: true     # Re-apply if someone manually edits in cluster
+      allowEmpty: false  # Never sync to empty chart
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Ignore diffs that are auto-managed (HPA current replicas, etc.)
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # Managed by HPA
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+      jsonPointers:
+        - /spec/metrics  # May drift from HPA controller
+
+---
+# ArgoCD Image Updater — auto-update image tag on new GHCR push
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bureau-staging
+  namespace: argocd
+  annotations:
+    # Image Updater: watch for new tags matching semver on ghcr.io
+    argocd-image-updater.argoproj.io/image-list: |
+      api-server=ghcr.io/bureau-id/bureau-api-server:~1.0,
+      workers=ghcr.io/bureau-id/bureau-workers:~1.0
+    argocd-image-updater.argoproj.io/api-server.update-strategy: semver
+    argocd-image-updater.argoproj.io/workers.update-strategy: semver
+    argocd-image-updater.argoproj.io/write-back-method: git
+    argocd-image-updater.argoproj.io/git-branch: staging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/bureau-id/bureau
+    targetRevision: staging
+    path: deploy/helm/bureau
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-staging.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bureau-staging
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

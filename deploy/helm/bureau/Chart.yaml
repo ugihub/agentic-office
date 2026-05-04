@@ -1,0 +1,15 @@
+apiVersion: v2
+name: bureau
+description: Bureau — Multi-Agent AI Platform (API Server + Workers)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - ai
+  - agents
+  - bureau
+  - llm
+maintainers:
+  - name: Bureau Platform Team
+    email: platform@bureau.id
+dependencies: []

@@ -1,0 +1,204 @@
+# Bureau Helm Values — default configuration
+# Override per environment: values-staging.yaml / values-production.yaml
+
+global:
+  imageRegistry: ghcr.io/bureau-id
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+
+# ─── API Server ───────────────────────────────────────────────────────────────
+apiServer:
+  enabled: true
+  image:
+    repository: ghcr.io/bureau-id/bureau-api-server
+    tag: ""  # defaults to global.imageTag
+    pullPolicy: ""  # defaults to global.imagePullPolicy
+
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  service:
+    type: ClusterIP
+    port: 3001
+    metricsPort: 9100
+
+  env:
+    NODE_ENV: production
+    PORT: "3001"
+    LOG_LEVEL: info
+    DIVISION_NAME: executive
+    BULLMQ_CONCURRENCY: "8"
+    MAX_LLM_CONCURRENCY: "3"
+    BULLMQ_LOCK_DURATION: "60000"
+    BULLMQ_STALLED_INTERVAL: "30000"
+    BULLMQ_MAX_STALLED_COUNT: "2"
+
+  # Liveness + readiness probes
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: 3001
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 3001
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # HPA settings
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    # Scale down slowly to drain in-flight requests
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+        policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 60
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies:
+          - type: Pods
+            value: 2
+            periodSeconds: 60
+
+  # PodDisruptionBudget — always keep at least 1 pod running
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Termination grace period for graceful shutdown drain
+  terminationGracePeriodSeconds: 60
+
+  ingress:
+    enabled: false
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: api.bureau.id
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: bureau-api-tls
+        hosts:
+          - api.bureau.id
+
+# ─── Workers ──────────────────────────────────────────────────────────────────
+workers:
+  enabled: true
+  image:
+    repository: ghcr.io/bureau-id/bureau-workers
+    tag: ""
+    pullPolicy: ""
+
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "1Gi"
+
+  env:
+    NODE_ENV: production
+    LOG_LEVEL: info
+    BULLMQ_CONCURRENCY: "4"
+    BULLMQ_LOCK_DURATION: "60000"
+    BULLMQ_STALLED_INTERVAL: "30000"
+    BULLMQ_MAX_STALLED_COUNT: "2"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+    # Workers scale by queue depth, not CPU
+    # Custom metric via KEDA would be ideal — Prometheus adapter fallback here
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 75
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 600  # Wait 10min before scaling down workers
+        policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 120
+      scaleUp:
+        stabilizationWindowSeconds: 30
+        policies:
+          - type: Pods
+            value: 3
+            periodSeconds: 60
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  terminationGracePeriodSeconds: 120  # Workers drain BullMQ jobs before exit
+
+# ─── Secrets (injected via Doppler / External Secrets Operator) ──────────────
+secrets:
+  # Secret name must exist in the namespace before deploying
+  # Create via: kubectl create secret generic bureau-secrets --from-env-file=.env
+  existingSecret: bureau-secrets
+  keys:
+    mongoUri: MONGO_URI
+    redisUrl: REDIS_URL
+    jwtPublicKey: JWT_PUBLIC_KEY
+    jwtPrivateKey: JWT_PRIVATE_KEY
+    apiKeyEncryptionKey: API_KEY_ENCRYPTION_KEY
+    anthropicApiKey: ANTHROPIC_API_KEY
+    geminiApiKey: GEMINI_API_KEY
+    resendApiKey: RESEND_API_KEY
+    otelEndpoint: OTEL_EXPORTER_OTLP_ENDPOINT
+
+# ─── Pod security ─────────────────────────────────────────────────────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532    # distroless nonroot uid
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# ─── Observability ────────────────────────────────────────────────────────────
+serviceMonitor:
+  # Requires Prometheus Operator in cluster
+  enabled: false
+  namespace: monitoring
+  interval: 15s
+  labels:
+    release: kube-prometheus-stack
+
+# ─── Node affinity (optional) ─────────────────────────────────────────────────
+affinity: {}
+tolerations: []
+nodeSelector: {}

@@ -1,0 +1,200 @@
+groups:
+  # ─── API Availability ────────────────────────────────────────────────────────
+  - name: bureau.api.availability
+    interval: 30s
+    rules:
+      - alert: BureauApiHighErrorRate
+        expr: |
+          rate(bureau_http_request_duration_ms_count{status_code=~"5.."}[5m])
+          /
+          rate(bureau_http_request_duration_ms_count[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Bureau API error rate > 1%"
+          description: "{{ $value | humanizePercentage }} of requests are failing (5xx) over 5 minutes. SLO target: < 1%."
+          runbook: "https://docs.bureau.id/runbooks/api-high-error-rate"
+
+      - alert: BureauApiHighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            rate(bureau_http_request_duration_ms_bucket{route="/api/v1/tasks",method="POST"}[5m])
+          ) > 500
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "POST /tasks p99 latency > 500ms"
+          description: "p99 latency is {{ $value }}ms. SLO target: < 500ms."
+          runbook: "https://docs.bureau.id/runbooks/api-high-latency"
+
+  # ─── Cost & Spending ─────────────────────────────────────────────────────────
+  - name: bureau.cost.anomaly
+    interval: 60s
+    rules:
+      - alert: BureauSpendingAnomalyDetected
+        expr: bureau_spending_anomalies_total > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: finance
+        annotations:
+          summary: "Spending anomaly detected for tenant {{ $labels.tenantId }}"
+          description: "Tenant {{ $labels.tenantId }} spending exceeds 3x rolling average ({{ $labels.multiplier_bucket }}). Investigate immediately."
+          runbook: "https://docs.bureau.id/runbooks/spending-anomaly"
+
+      - alert: BureauLlmCostBurnRateHigh
+        expr: |
+          rate(bureau_llm_cost_usd_total[1h]) * 3600 > 100
+        for: 10m
+        labels:
+          severity: warning
+          team: finance
+        annotations:
+          summary: "LLM cost burn rate > $100/hour"
+          description: "Current burn rate: ${{ $value | humanize }}/hour across all tenants."
+          runbook: "https://docs.bureau.id/runbooks/high-burn-rate"
+
+  # ─── Queue Health ────────────────────────────────────────────────────────────
+  - name: bureau.queue.health
+    interval: 30s
+    rules:
+      - alert: BureauQueueDepthHigh
+        expr: bureau_queue_depth > 1000
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "BullMQ queue {{ $labels.division }} depth > 1000"
+          description: "Queue {{ $labels.division }} has {{ $value }} pending jobs. API should return 503 + Retry-After."
+          runbook: "https://docs.bureau.id/runbooks/queue-depth-high"
+
+      - alert: BureauQueueDepthWarning
+        expr: bureau_queue_depth > 500
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "BullMQ queue {{ $labels.division }} depth > 500"
+          description: "Queue {{ $labels.division }} has {{ $value }} pending jobs. Scaling may be needed."
+
+  # ─── AwaitingUserDecision ────────────────────────────────────────────────────
+  - name: bureau.decision.expiry
+    interval: 60s
+    rules:
+      - alert: BureauAwaitingDecisionHigh
+        expr: bureau_awaiting_decision_tasks > 10
+        for: 30m
+        labels:
+          severity: warning
+          team: product
+        annotations:
+          summary: "{{ $value }} tasks stuck in AwaitingUserDecision"
+          description: "High number of tasks awaiting user input. SLO: >70% resolved within 2h. Check notification delivery."
+          runbook: "https://docs.bureau.id/runbooks/awaiting-decision-high"
+
+      - alert: BureauDecisionResolutionRateLow
+        expr: |
+          (
+            rate(bureau_tasks_completed_total{outputQuality="best_effort"}[2h])
+            + rate(bureau_tasks_completed_total{terminalState="Cancelled"}[2h])
+          )
+          /
+          (rate(bureau_tasks_submitted_total[2h]) + 0.001) < 0.70
+        for: 2h
+        labels:
+          severity: warning
+          team: product
+        annotations:
+          summary: "AwaitingUserDecision resolution rate below 70% SLO"
+          description: "Current resolution rate: {{ $value | humanizePercentage }}. Check email delivery and decision UI."
+
+  # ─── Fast Path Adoption ──────────────────────────────────────────────────────
+  - name: bureau.path.distribution
+    interval: 5m
+    rules:
+      - alert: BureauFastPathAdoptionLow
+        expr: |
+          rate(bureau_path_classifications_total{executionPath="fast"}[1h])
+          /
+          rate(bureau_path_classifications_total[1h]) < 0.15
+        for: 1h
+        labels:
+          severity: info
+          team: product
+        annotations:
+          summary: "Fast path adoption below 15%"
+          description: "Fast path adoption: {{ $value | humanizePercentage }}. Prompt classification may need tuning."
+
+  # ─── Escalation Frequency ────────────────────────────────────────────────────
+  - name: bureau.escalation
+    interval: 5m
+    rules:
+      - alert: BureauEscalationRateHigh
+        expr: |
+          rate(bureau_escalations_total[1h])
+          /
+          rate(bureau_tasks_submitted_total[1h]) > 0.30
+        for: 30m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Escalation rate > 30% — economy models underperforming"
+          description: "{{ $value | humanizePercentage }} of tasks requiring model escalation. Review QA thresholds or prompt templates."
+          runbook: "https://docs.bureau.id/runbooks/high-escalation-rate"
+
+  # ─── Compliance ──────────────────────────────────────────────────────────────
+  - name: bureau.compliance
+    interval: 60s
+    rules:
+      - alert: BureauPromptInjectionSpike
+        expr: |
+          rate(bureau_compliance_violations_total{violationType="prompt_injection"}[15m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Prompt injection spike detected"
+          description: "{{ $value | humanize }} injection attempts/sec over 15min. Possible coordinated attack."
+          runbook: "https://docs.bureau.id/runbooks/prompt-injection-spike"
+
+  # ─── Division Latency ────────────────────────────────────────────────────────
+  - name: bureau.division.latency
+    interval: 30s
+    rules:
+      - alert: BureauProductionDivisionSlow
+        expr: |
+          histogram_quantile(0.95,
+            rate(bureau_division_duration_ms_bucket{division="Production"}[5m])
+          ) > 30000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Production division p95 latency > 30s"
+          description: "p95: {{ $value }}ms. May indicate LLM provider degradation or backpressure."
+
+  # ─── Caching Effectiveness ───────────────────────────────────────────────────
+  - name: bureau.cache
+    interval: 5m
+    rules:
+      - alert: BureauSemanticCacheHitRateLow
+        expr: |
+          rate(bureau_cache_hits_total{cacheType="semantic"}[1h])
+          /
+          (rate(bureau_tasks_submitted_total[1h]) + 0.001) < 0.05
+        for: 2h
+        labels:
+          severity: info
+          team: platform
+        annotations:
+          summary: "Semantic cache hit rate below 5%"
+          description: "Semantic cache may need warm-up or similarity threshold tuning."

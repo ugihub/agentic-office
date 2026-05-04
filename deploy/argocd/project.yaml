@@ -1,0 +1,70 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: bureau-platform
+  namespace: argocd
+spec:
+  description: Bureau multi-agent AI platform
+
+  # Source repos allowed
+  sourceRepos:
+    - https://github.com/bureau-id/bureau
+    - https://charts.bureau.id
+
+  # Destination clusters + namespaces
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: bureau
+    - server: https://kubernetes.default.svc
+      namespace: bureau-staging
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+
+  # Cluster resource whitelists
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRole
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRoleBinding
+
+  # Namespace resource whitelists
+  namespaceResourceWhitelist:
+    - group: "apps"
+      kind: Deployment
+    - group: "autoscaling"
+      kind: HorizontalPodAutoscaler
+    - group: "policy"
+      kind: PodDisruptionBudget
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ConfigMap
+    - group: "networking.k8s.io"
+      kind: Ingress
+    - group: "monitoring.coreos.com"
+      kind: ServiceMonitor
+
+  # Sync windows — prevent deployments during peak hours
+  syncWindows:
+    - kind: deny
+      schedule: "0 9 * * 1-5"   # Block Mon-Fri 9am UTC
+      duration: 8h
+      applications:
+        - bureau                 # Production only — staging can deploy anytime
+      manualSync: true           # Allow manual override if needed
+    - kind: allow
+      schedule: "0 17 * * 1-5"  # Allow Mon-Fri after 5pm UTC
+      duration: 6h
+      applications:
+        - bureau
+
+  roles:
+    - name: deployer
+      description: CI/CD pipeline deploy role
+      policies:
+        - p, proj:bureau-platform:deployer, applications, sync, bureau-platform/*, allow
+        - p, proj:bureau-platform:deployer, applications, get, bureau-platform/*, allow
+      groups:
+        - bureau:ci-deployers

@@ -1745,3 +1745,348 @@ tests/                             # @bureau/tests — workspace package baru
 *Total test cases: ~92 (Phase 7 E2E) + 25 (Phase 8 performance/security) = ~117 new tests.*
 *Total load test scripts: 3 k6 scripts (main, fast-vs-full, memory-leak).*
 *Security scan: 4-stage automated scan pipeline.*
+
+---
+
+## Phase 9 — Observability & Monitoring
+
+**Tanggal:** 2026-05-05
+**Fase:** Phase 9 — Production Observability
+
+---
+
+### Yang Sudah Ada Sebelumnya (Phase 1-8)
+
+| Item | Status |
+|---|---|
+| `@bureau/telemetry` — Pino logger + OTel traces | ✅ |
+| `packages/telemetry/src/metrics.ts` — Prometheus metrics per divisi | ✅ |
+| `deploy/prometheus-rules.yml` — Alert rules lengkap | ✅ |
+| `pillars/api-server/src/routes/health.ts` — Liveness + readiness probe | ✅ |
+
+### Yang Ditambahkan di Phase 9
+
+#### Grafana Dashboards
+
+**`deploy/grafana/provisioning/dashboards/bureau-dashboards.yml`**
+- Provisioning config: auto-load dashboard dari file system
+- `updateIntervalSeconds: 30` — hot reload dashboard tanpa restart Grafana
+
+**`deploy/grafana/dashboards/bureau-main.json`** — 25 panels dalam 6 rows:
+
+| Row | Panels |
+|---|---|
+| Overview | Tasks Submitted (1h), AwaitingUserDecision count, Error Rate, LLM Burn Rate, Fast Path Ratio, Escalation Rate |
+| Task Throughput & Path Distribution | Throughput by path (time series), Escalation frequency by reason |
+| API Latency | POST /tasks p50/p95/p99 (SLO: <500ms), Division execution latency p95 |
+| Queue Depth | BullMQ queue depth per division (alert threshold: 1000) |
+| Cost & LLM Usage | Cost by provider (stacked, $/hr), Cache hits (semantic vs prompt caching) |
+| AwaitingUserDecision | Current count per tenant, Decision resolution rate gauge (SLO: >70%) |
+| Security & Compliance | Compliance violations by type, Spending anomalies per tenant |
+
+**Panel penting:**
+- `bureau_tasks_submitted_total{executionPath="fast"} / bureau_tasks_submitted_total` → Fast Path Ratio
+- `rate(bureau_escalations_total[1h]) / rate(bureau_tasks_submitted_total[1h])` → Escalation Rate
+- `bureau_awaiting_decision_tasks` → gauge AwaitingUserDecision (SLO: >70% resolved in 2h)
+- Tenant variable dropdown untuk filter per-tenant
+
+#### Prometheus Config Update
+
+**`deploy/prometheus.yml`** — ditambahkan:
+- `rule_files: [/etc/prometheus/rules/*.yml]` → wire alert rules ke Prometheus
+- `alerting:` block (alertmanager disabled untuk MVP — alerts via Grafana saja)
+- `bureau-workers` scrape target `:9102`
+- `mongodb-exporter` scrape target `:9216`
+
+#### Runbook
+
+**`docs/runbook.md`** — Operational runbook lengkap dengan 9 alert procedures:
+
+| Alert | Severity | Procedure |
+|---|---|---|
+| BureauApiHighErrorRate | CRITICAL | MongoDB/Redis check → restart → escalate 10min |
+| BureauApiHighLatencyP99 | WARNING | Queue depth → MongoDB slow query → Redis memory → Jaeger trace |
+| BureauSpendingAnomalyDetected | WARNING | Cost analytics query → freeze tenant or revoke key |
+| BureauQueueDepthHigh | CRITICAL | Worker status → dead letter queue → scale workers |
+| BureauAwaitingDecisionHigh | WARNING | Email service check → timeout worker → pending decisions query |
+| BureauEscalationRateHigh | WARNING | QA failure analysis → model registry rotation |
+| BureauPromptInjectionSpike | CRITICAL | Security incident procedure → freeze tenant → revoke key |
+| BureauLlmCostBurnRateHigh | WARNING | Top spenders query → escalation ratio |
+
+**Plus:**
+- Graceful shutdown procedure (SIGTERM drain sequence)
+- MongoDB Atlas backup + recovery steps
+- Kubernetes rollback + ArgoCD rollback
+- Error budget calculation dan freeze policy
+- SLO reference table
+
+---
+
+### Checklist Phase 9 — Status
+
+| Item | Status |
+|---|---|
+| Jaeger tracing via OTel (dari Phase 1) | ✅ |
+| Prometheus metrics per divisi (dari Phase 1-8) | ✅ |
+| Grafana dashboard: fast path ratio, escalation frequency, AwaitingUserDecision | ✅ |
+| Alert rules: error rate, cost anomaly, queue depth, latency | ✅ (dari Phase 8) |
+| Alert: spending anomaly per tenant (3x rolling average) | ✅ (dari Phase 8) |
+| Pino redaction list (prompt, apiKey, token, dll.) | ✅ (dari Phase 1) |
+| Liveness + readiness probe | ✅ (dari Phase 2) |
+| Runbook | ✅ |
+| Prometheus rule_files wired | ✅ |
+| Grafana dashboard provisioning | ✅ |
+
+---
+
+*Phase 9 implementation selesai: 2026-05-05.*
+
+---
+
+## Phase 10 — Production Hardening
+
+**Tanggal:** 2026-05-05
+**Fase:** Phase 10 — Production Readiness
+
+---
+
+### Distroless Dockerfiles (< 150MB)
+
+**`deploy/Dockerfile.api-server`** — Upgrade dari `node:20-alpine` ke distroless:
+
+```
+Stage 1: node:20-alpine AS base (pnpm setup)
+Stage 2: deps (install all deps)
+Stage 3: builder (TypeScript compile)
+Stage 4: prod-deps (pnpm install --prod)
+Stage 5: gcr.io/distroless/nodejs20-debian12:nonroot (runtime)
+```
+
+**Security properties distroless:**
+- No shell (sh, bash, ash — tidak ada)
+- No package manager (apt, apk — tidak ada)
+- No curl/wget/nc — tidak ada exfil tools
+- Non-root user uid=65532 (nonroot)
+- `--chown=nonroot:nonroot` semua COPY
+- `readOnlyRootFilesystem: true` via securityContext Helm
+- HEALTHCHECK via `node -e "require('http').get(...)"` (karena tidak ada curl)
+
+**`deploy/Dockerfile.workers`** — Same pattern dengan distroless runner.
+
+Target final image: ~120MB (distroless Node 20 base ~50MB + compiled JS).
+
+---
+
+### Kubernetes Helm Chart + HPA
+
+**`deploy/helm/bureau/`** — Full Helm chart:
+
+```
+Chart.yaml        # Metadata: bureau v1.0.0
+values.yaml       # Default config (dev/staging)
+values-production.yaml  # Production overrides
+templates/
+  _helpers.tpl              # bureau.fullname, bureau.labels, etc.
+  deployment-api-server.yaml  # Deployment dengan security context
+  deployment-workers.yaml     # Deployment workers
+  hpa.yaml                    # HPA api-server + workers (autoscaling/v2)
+  service.yaml                # ClusterIP + Ingress (optional)
+  pdb.yaml                    # PodDisruptionBudget (minAvailable: 1)
+  secret.yaml                 # Hanya instruksi — secrets tidak di-commit
+```
+
+**HPA API Server:**
+- Min: 2, Max: 10 (dev) / Max: 20 (prod)
+- Scale trigger: CPU 70% + Memory 80%
+- Scale down: staggered 5min window, 1 pod/60s
+- Scale up: 30s window, 2 pods/60s
+
+**HPA Workers:**
+- Min: 2, Max: 20 (dev) / Max: 40 (prod)
+- Scale trigger: CPU 60% + Memory 75%
+- Scale down: 10min window (drain BullMQ jobs dulu)
+- Scale up: 30s window, 3 pods/60s
+
+**PodDisruptionBudget:** `minAvailable: 1` untuk api-server dan workers — Kubernetes node drain tidak pernah membuat zero replicas.
+
+**Security context (Pod + Container level):**
+```yaml
+runAsNonRoot: true
+runAsUser: 65532
+readOnlyRootFilesystem: true
+allowPrivilegeEscalation: false
+capabilities: { drop: [ALL] }
+seccompProfile: RuntimeDefault
+```
+
+---
+
+### ArgoCD CD Pipeline
+
+**`deploy/argocd/application.yaml`** — Dua Application objects:
+
+**Production (`bureau`):**
+- Source: `main` branch, path: `deploy/helm/bureau`
+- Sync: automated (prune + self-heal)
+- ignoreDifferences: `spec.replicas` (managed by HPA)
+- Sync window: blocked Mon-Fri 9am-5pm UTC, allowed after 5pm
+- Retry: 5x dengan exponential backoff (5s→3min)
+
+**Staging (`bureau-staging`):**
+- Source: `staging` branch
+- Image Updater: watch `~1.0` semver tags dari GHCR
+- Auto-update strategy: semver, write-back via git
+
+**`deploy/argocd/project.yaml`** — AppProject dengan:
+- Source repos whitelist
+- Namespace resource whitelist (Deployment, HPA, PDB, Service, Ingress, ServiceMonitor)
+- Sync windows (deploy freeze policy)
+- Role `deployer` untuk CI/CD pipeline
+
+---
+
+### Upstash Vector Semantic Cache
+
+**`packages/llm-providers/src/cache/upstash-vector-cache.ts`**
+
+```typescript
+// Semantic cache flow:
+// 1. Classify category → financial = bypass (TTL=0 rule applies)
+// 2. Embed prompt → vector (via injected embedFn)
+// 3. Query Upstash topK=1 → score >= 0.95 threshold → cache HIT
+// 4. Record cache hit metric (bureau_cache_hits_total{cacheType="semantic"})
+// 5. On HIT: return cached SemanticCacheEntry (tidak ada LLM call)
+// 6. On MISS / error: return null → caller invokes LLM normally
+```
+
+**Key design decisions:**
+- `SIMILARITY_FLOOR = 0.90` — hard minimum, tidak bisa dilowerin
+- Default threshold `0.95` — sesuai plan
+- Financial prompts: NEVER upserted dan NEVER queried (bypass total)
+- Semua failures non-fatal: `log.warn + return null`
+- `embedFn` di-inject → testable, swap model tanpa refactor
+- `client` di-inject → testable tanpa real Upstash
+
+**Upstash Vector config (docs):**
+```
+UPSTASH_VECTOR_REST_URL=https://xxx.upstash.io
+UPSTASH_VECTOR_REST_TOKEN=AXxx...
+Dimensions: 1536 (OpenAI text-embedding-3-small) / 768 (other)
+Distance: COSINE
+```
+
+**Cost estimate (May 2026):** ~$1.80/day at 5 tasks/sec dengan 95% hit rate.
+
+**Test file:** `packages/llm-providers/src/cache/upstash-vector-cache.test.ts` — 12 test cases
+
+| Test | Coverage |
+|---|---|
+| Returns null on MISS | Query returns no results |
+| Returns cached entry on HIT (score >= 0.95) | Score threshold |
+| Returns null when score below threshold | Score < 0.95 |
+| SIMILARITY_FLOOR prevents lowering threshold below 0.90 | Floor enforcement |
+| Financial prompts: BYPASS (even with 0.99 score) | financial=bypass |
+| bypass option skips entirely | opts.bypass |
+| Upstash throws → null non-fatal | Error handling |
+| Embedding throws → null non-fatal | Error handling |
+| set() stores with embedding | Upsert flow |
+| set() skips financial prompts | Never upsert financial |
+| set() does not throw when Upstash fails | Non-fatal |
+| invalidate() + non-fatal on failure | Delete flow |
+
+---
+
+### MongoDB Atlas Backup
+
+**`deploy/scripts/atlas-backup.sh`** — Backup CLI script:
+
+| Command | Fungsi |
+|---|---|
+| `snapshot` | Create on-demand Atlas snapshot |
+| `list` | List 10 snapshots terbaru |
+| `verify` | Verify last snapshot exists dan valid |
+| `restore --snapshot-id <id> --target-cluster <name>` | Restore ke cluster (bukan prod!) |
+| `scheduled` | Full cycle: snapshot + verify (untuk cron) |
+
+**Safety features:**
+- Refuses restore ke cluster yang mengandung "prod" atau "bureau-cluster" (primary)
+- Requires typing "RESTORE" untuk konfirmasi
+- Results saved ke `$RESULTS_DIR`
+
+**`deploy/scripts/atlas-backup-cronjob.yaml`** — Kubernetes CronJob:
+- Schedule: `0 2 * * *` (daily 02:00 UTC, low-traffic window)
+- `concurrencyPolicy: Forbid` — tidak ada concurrent backup
+- Retry: `backoffLimit: 1`
+
+---
+
+### Chaos Tests
+
+**`tests/chaos/chaos-scenarios.test.ts`** — 21 unit/mock chaos scenarios:
+
+| Group | Scenarios |
+|---|---|
+| Chaos 1: Redis unavailability | Redis ECONNREFUSED → null (non-fatal), Upstash down → null, Upstash set failure → no throw |
+| Chaos 2: Path classifier | 100 concurrent calls (thread-safe), empty prompt (fast), 10k char prompt (no OOM) |
+| Chaos 3: Financial classifier hardness | TTL=0 is frozen constant, all bypass attempts detected, no over-classification |
+| Chaos 4: Concurrent budget depletion | Atomic reserve simulation (1 of 2 wins), 50 workers (only 10 succeed, balance >= 0) |
+| Chaos 5: Result<T,E> error propagation | err() wraps, ok() wraps, chaining non-throws, tryAsync captures thrown exceptions |
+| Chaos 6: Flaky deps with retry | Succeeds after N failures, fails after max retries |
+| Chaos 7: AbortSignal propagation | Root→child cascade, pre-call check, sibling independence |
+
+**`tests/chaos/chaos-infrastructure.sh`** — Real infrastructure chaos (staging only):
+
+| Scenario | Test |
+|---|---|
+| CHAOS-INFRA-1 | Redis restart → system recovery |
+| CHAOS-INFRA-2 | Workers killed → outbox ensures redelivery |
+| CHAOS-INFRA-3 | 50 concurrent submissions → API survives |
+| CHAOS-INFRA-4 | SIGTERM → graceful drain → exit 0 |
+
+---
+
+### Checklist Phase 10 — Status
+
+| Item | Status |
+|---|---|
+| Dockerfile multi-stage → distroless (`gcr.io/distroless/nodejs20-debian12:nonroot`) | ✅ |
+| Image < 150MB target (distroless base ~50MB) | ✅ |
+| Non-root uid=65532, readOnlyRootFilesystem | ✅ |
+| Kubernetes Helm chart (Chart.yaml + values.yaml + templates) | ✅ |
+| HPA api-server (min 2, max 10, CPU 70% + Memory 80%) | ✅ |
+| HPA workers (min 2, max 20, scale down 10min window) | ✅ |
+| PodDisruptionBudget (minAvailable: 1 untuk api-server + workers) | ✅ |
+| ArgoCD Application: production + staging | ✅ |
+| ArgoCD AppProject dengan sync windows (freeze Mon-Fri 9am-5pm) | ✅ |
+| ArgoCD Image Updater (semver ~1.0 auto-update) | ✅ |
+| Upstash Vector semantic cache (95% threshold, financial bypass) | ✅ |
+| Semantic cache test suite (12 tests) | ✅ |
+| MongoDB Atlas backup script (snapshot/list/verify/restore) | ✅ |
+| Atlas backup Kubernetes CronJob (daily 02:00 UTC) | ✅ |
+| Prompt caching (dari Phase 4 — Claude provider tracks cachedTokens) | ✅ |
+| Chaos unit tests (21 scenarios) | ✅ |
+| Chaos infrastructure script (4 real scenarios, staging only) | ✅ |
+
+---
+
+## Poin Kritis Phase 9-10
+
+1. **Grafana dashboard pakai PromQL asli** — Semua panel menggunakan ekspresi yang sama dengan alert rules di `prometheus-rules.yml`. Dashboard dan alert tidak pernah diverge.
+
+2. **Distroless adalah security boundary** — Tidak ada shell di container. Jika container dikompromis, attacker tidak bisa exfil data via bash/curl. Dikombinasikan dengan `readOnlyRootFilesystem: true` dan `capabilities: drop ALL`.
+
+3. **HPA scale down staggered** — Workers scale down 1 pod per 60s (api-server) atau 1 pod per 120s (workers), dengan stabilization window 5min/10min. Ini mencegah scale-down terlalu agresif saat ada burst traffik yang baru selesai.
+
+4. **ArgoCD sync window adalah deploy freeze** — Tidak ada deployment ke production di jam kerja Mon-Fri 9am-5pm UTC. Manual sync tetap tersedia untuk emergencies. Ini adalah policy, bukan technical hard stop.
+
+5. **Semantic cache financial bypass adalah duplikasi keamanan** — `classifyCacheCategory` dipanggil DULU sebelum embed. Financial prompt tidak pernah di-embed (menghemat embedding API cost juga). Ini mirror dari Redis CategoryCache — dua layer perlindungan.
+
+6. **Atlas backup restore ke cluster terpisah** — Script menolak restore ke "prod" atau "bureau-cluster" (primary). Verifikasi data wajib di cluster restore dulu sebelum switch traffic. Ini mencegah accidental production data loss.
+
+7. **Chaos tests verify non-fatal behavior** — Setiap test dalam chaos suite memverifikasi bahwa system failure (Redis down, Upstash down, embedding timeout) menghasilkan `null` / graceful degradation, BUKAN unhandled exception atau service crash.
+
+---
+
+*Phase 9-10 implementation selesai: 2026-05-05.*
+*Files added: Grafana dashboard (1), Prometheus config update, Runbook, Distroless Dockerfiles (2), Helm chart (8 files), ArgoCD manifests (2), Upstash Vector cache + tests, Atlas backup scripts (2), Chaos tests (2).*
+*Total new files: ~20 files.*

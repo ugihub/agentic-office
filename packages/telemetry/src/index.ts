@@ -20,3 +20,19 @@ export {
   withSpan,
   type TelemetryOptions,
 } from './otel.js'
+
+export {
+  recordTaskSubmitted,
+  recordTaskCompleted,
+  recordPathClassification,
+  recordEscalation,
+  incrementAwaitingDecision,
+  decrementAwaitingDecision,
+  recordLlmCost,
+  recordQueueDepth,
+  recordDivisionLatency,
+  recordHttpRequest,
+  recordSpendingAnomaly,
+  recordCacheHit,
+  recordComplianceViolation,
+} from './metrics.js'
