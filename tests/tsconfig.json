@@ -1,0 +1,34 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist",
+    "composite": true,
+    "paths": {
+      "@bureau/shared-kernel": ["../packages/shared-kernel/src/index.ts"],
+      "@bureau/contracts": ["../packages/contracts/src/index.ts"],
+      "@bureau/agents-core": ["../packages/agents-core/src/index.ts"],
+      "@bureau/auth": ["../packages/auth/src/index.ts"],
+      "@bureau/cost-analytics": ["../packages/cost-analytics/src/index.ts"],
+      "@bureau/infra-messaging": ["../packages/infra-messaging/src/index.ts"],
+      "@bureau/infra-mongo": ["../packages/infra-mongo/src/index.ts"],
+      "@bureau/llm-providers": ["../packages/llm-providers/src/index.ts"],
+      "@bureau/models": ["../packages/models/src/index.ts"],
+      "@bureau/task-machine": ["../packages/task-machine/src/index.ts"],
+      "@bureau/telemetry": ["../packages/telemetry/src/index.ts"]
+    }
+  },
+  "include": ["e2e/**/*.ts", "performance/**/*.ts"],
+  "references": [
+    { "path": "../packages/shared-kernel" },
+    { "path": "../packages/contracts" },
+    { "path": "../packages/agents-core" },
+    { "path": "../packages/auth" },
+    { "path": "../packages/infra-messaging" },
+    { "path": "../packages/infra-mongo" },
+    { "path": "../packages/llm-providers" },
+    { "path": "../packages/models" },
+    { "path": "../packages/task-machine" },
+    { "path": "../packages/telemetry" }
+  ]
+}

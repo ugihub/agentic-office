@@ -48,3 +48,8 @@ prometheus-data/
 
 # Doppler
 .doppler/
+
+# Test results (k6, Trivy, security scan output)
+tests/security/results/*.json
+tests/security/results/*.txt
+tests/load/results/

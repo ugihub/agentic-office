@@ -3,3 +3,4 @@ packages:
   - 'core'
   - 'pillars/*'
   - 'apps/*'
+  - 'tests'

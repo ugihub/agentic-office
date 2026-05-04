@@ -1,0 +1,34 @@
+{
+  "name": "@bureau/tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bureau — E2E, load, and security tests",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run tests/e2e",
+    "test:performance": "vitest run tests/performance",
+    "test:coverage": "vitest run --coverage",
+    "load:main": "k6 run load/k6-load-test.js",
+    "load:fast-path": "k6 run load/k6-fast-path.js",
+    "load:memory": "k6 run load/k6-memory-leak.js",
+    "security:scan": "bash security/security-scan.sh",
+    "security:audit": "pnpm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@bureau/agents-core": "workspace:*",
+    "@bureau/auth": "workspace:*",
+    "@bureau/contracts": "workspace:*",
+    "@bureau/cost-analytics": "workspace:*",
+    "@bureau/infra-messaging": "workspace:*",
+    "@bureau/infra-mongo": "workspace:*",
+    "@bureau/llm-providers": "workspace:*",
+    "@bureau/models": "workspace:*",
+    "@bureau/shared-kernel": "workspace:*",
+    "@bureau/task-machine": "workspace:*",
+    "@bureau/telemetry": "workspace:*",
+    "@vitest/coverage-v8": "^1.0.0",
+    "vitest": "^1.0.0"
+  }
+}

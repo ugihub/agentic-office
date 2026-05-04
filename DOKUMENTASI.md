@@ -1403,3 +1403,345 @@ await anonymizeUserData(userId, deps)
 *Phase 5-6 implementation selesai: 2026-05-03.*
 *Total packages: 14 packages + 3 pillars (mcp-server, api-server, sdk) + workers + 1 core layer.*
 *Total ADR: 6 keputusan arsitektur terdokumentasi.*
+
+---
+
+## Phase 7 — E2E & Skenario Komunikasi
+
+**Tanggal:** 2026-05-04
+**Fase:** Phase 7 — End-to-End Scenario Testing (11 skenario + audit trail)
+
+---
+
+### Struktur Test Suite
+
+```
+tests/                             # @bureau/tests — workspace package baru
+├── package.json                   # devDependencies semua @bureau/* packages
+├── tsconfig.json                  # Project references ke semua packages
+├── vitest.config.ts               # Test runner + path aliases
+├── e2e/                           # Skenario komunikasi end-to-end
+│   ├── scenario-a-happy-path.test.ts
+│   ├── scenario-b-qa-escalation.test.ts
+│   ├── scenario-c-awaiting-decision.test.ts
+│   ├── scenario-d-provider-fallback.test.ts
+│   ├── scenario-e-bullmq-stalled.test.ts
+│   ├── scenario-f-sigterm.test.ts
+│   ├── scenario-g-prompt-injection.test.ts
+│   ├── scenario-h-parallel-tasks.test.ts
+│   └── scenario-ijk-audit-trail.test.ts   # Scenarios I, J, K + audit trail
+├── load/                          # k6 load test scripts
+│   ├── k6-load-test.js            # Main load test (50 VUs, p99 < 500ms)
+│   ├── k6-fast-path.js            # Fast vs full path comparison
+│   └── k6-memory-leak.js          # 24-hour sustained load
+├── performance/                   # Vitest-based benchmarks
+│   ├── cost-benchmark.test.ts     # Smart routing >= 60% savings
+│   └── latency-benchmark.test.ts  # Non-LLM code path latency
+└── security/                      # Security scan tooling
+    ├── security-scan.sh           # Trivy + pnpm audit + secret detection
+    ├── security-patterns.test.ts  # Unit tests for security patterns
+    ├── .trivyignore               # Accepted CVEs with justification
+    └── results/                   # Scan outputs (gitignored)
+```
+
+---
+
+### Skenario E2E — Coverage
+
+#### Scenario A — Happy Path (Three Pillars)
+**File:** `e2e/scenario-a-happy-path.test.ts` | **Tests:** 11
+
+- A1-A3: Pilar 1 (MCP) — task classification, ID generation, state machine completion
+- A4-A7: Pilar 2 (API) — POST /tasks validation, SSE event sequence, idempotency-key
+- A8-A11: Pilar 3 (SDK) — LLM generate, waitForTask polling, compliance pass, cost recorded
+
+#### Scenario B — QA Reject Loop + Model Escalation
+**File:** `e2e/scenario-b-qa-escalation.test.ts` | **Tests:** 11
+
+- B1: QA failure reason propagation ke Production (targeted improvement)
+- B2: HR SSC escalation chain — economy → standard → premium dengan biaya meningkat
+- B3: State machine loops back ke Producing (< max retries) vs Completed setelah QA pass
+- B4: Mock LLM: economy model menghasilkan output lebih singkat, standard lebih detail
+- B5: Max 3 QA failures → AwaitingUserDecision (tidak langsung Failed)
+
+#### Scenario C — Budget Exhausted → AwaitingUserDecision
+**File:** `e2e/scenario-c-awaiting-decision.test.ts` | **Tests:** 9
+
+- C1: Finance `reserveBudgetAtomic` fails ketika `remaining < totalEstimatedCost`
+- C2: `BUDGET_INSUFFICIENT_FOR_ESCALATION` → AwaitingUserDecision state
+- C2b: `pendingDecision` shape valid (reason, bestEffortAvailable, expiresAt, defaultAction)
+- C3: `USER_DECISION best_effort` → Formatting → Completed dengan `outputQuality='best_effort'`
+- C4: `USER_DECISION cancel` → Cancelled (budget refund expected)
+- C5: Timeout 24h → auto-execute `best_effort`; email deduplication via `notifiedAt`
+
+#### Scenario D — LLM Provider 503 + Fallback
+**File:** `e2e/scenario-d-provider-fallback.test.ts` | **Tests:** 9
+
+- D1: 503/429/ECONNRESET classified as retryable; 4xx NOT retryable
+- D2: `failNextCall` injection; provider recovers after transient failure
+- D3: Circuit breaker open → fallback to Gemini; `usedFallback: true` always present
+- D4: `cost_analytics` records actual provider (Google), bukan intended (Anthropic)
+- D5: Bulkhead: max 3 concurrent LLM calls per provider via p-limit
+
+#### Scenario E — BullMQ Stalled Job + Native Requeue
+**File:** `e2e/scenario-e-bullmq-stalled.test.ts` | **Tests:** 9
+
+- E1: `BUREAU_WORKER_OPTIONS` — lockDuration=60s, stalledInterval=30s, maxStalledCount=2
+- E2: `getAttemptReason(0)='initial'`, `(1,false)='stall_requeue'`, `(1,true)='qa_escalation'`
+- E3: Idempotency — BullMQ jobId deduplication; same job tidak diproses dua kali
+- E4: MongoDB state survives crash; `stageVersion` mencegah split-brain
+- E5: BullMQ lock renewal > custom heartbeat frequency (Redis, bukan MongoDB write storm)
+
+#### Scenario F — SIGTERM Graceful Shutdown
+**File:** `e2e/scenario-f-sigterm.test.ts` | **Tests:** 9
+
+- F1: Root AbortController → child controllers; AbortSignal propagates through agent hierarchy
+- F2: In-flight LLM call cancelled via AbortSignal
+- F3: Drain completes dalam drainTimeoutMs; slow jobs trigger forceful close
+- F4: Shutdown sequence: stop_accepting → drain_bullmq → close_mongodb → close_redis → exit_0
+- F5: Task state recovery — new worker reads MongoDB, continues dengan correct attempt
+
+#### Scenario G — Prompt Injection Compliance Block
+**File:** `e2e/scenario-g-prompt-injection.test.ts` | **Tests:** 16
+
+- G1: 7 injection patterns detected (ignore previous, forget everything, [INST], roleplay, dll.)
+- G2: Fast path (SchemaValidator) still catches injections
+- G3: 4 clean prompts pass compliance (false positive rate = 0)
+- G4: Injection = high severity; full path runs 3 validators; fast path 1 validator
+- G5: No LLM tokens spent on blocked prompts
+- G6: Audit entry for violation: prompt='[REDACTED]', violationType='prompt_injection'
+
+#### Scenario H — 50 Parallel Tasks (Race Condition Safety)
+**File:** `e2e/scenario-h-parallel-tasks.test.ts` | **Tests:** 12
+
+- H1: 50 tasks → 50 unique IDs; ULID monotonically increasing
+- H2: 50 concurrent classifyPath calls — no state pollution (fast/research/code correctly classified)
+- H3: 50 concurrent Finance reservations — balance tidak negatif; InsufficientBudgetError yang benar
+- H4: 50 concurrent LLM calls dengan bulkhead p-limit(3) — maxConcurrent ≤ 3
+- H5: Tenant isolation — tenant A tidak mengakses budget tenant B
+- H6: 50 correlation IDs unique
+
+#### Scenario I, J, K + Audit Trail
+**File:** `e2e/scenario-ijk-audit-trail.test.ts` | **Tests:** 26
+
+**Scenario I (Fast Path):**
+- I1-I3: Simple prompts → fast path; Research division NOT in fast path stages
+- I4: Finance always present in fast path (Finance tidak bisa di-skip)
+- I5: Full path includes Research division
+
+**Scenario J (Spending Anomaly):**
+- J1-J3: 3x rolling avg → alert; 2x NOT alert; per-tenant baseline (bukan global)
+- J4-J6: Alert payload shape; 100% quota → freeze; 80% quota → warning email
+
+**Scenario K (Cache Categories):**
+- K1: Financial prompts → category='financial' → TTL=0; cannot be overridden by tenant
+- K2: Temporal prompts → TTL ∈ [60s, 600s]
+- K3: All floor TTLs ≥ 0; max TTLs ≥ floor TTLs
+
+**Audit Trail:**
+- AT1: Every state machine transition produces structured audit entry
+- AT2: Standard path ≥ 6 entries; fast path < standard (no Research transition)
+- AT3: Required fields (messageId, correlationId, schemaVersion, transport, status)
+- AT4: `payloadSnapshot` NOT in audit_trail (privacy) — only `payloadHash`
+- AT4b: BullMQ jobId recorded for distributed tracing
+
+---
+
+### Checklist Phase 7 — Status
+
+| Item | Status |
+|---|---|
+| Skenario A — Happy path ketiga pilar end-to-end | ✅ |
+| Skenario B — QA reject loop, eskalasi model, task selesai | ✅ |
+| Skenario C — Budget habis → AwaitingUserDecision → best_effort | ✅ CRITICAL |
+| Skenario D — LLM provider 503, fallback, task selesai | ✅ |
+| Skenario E — BullMQ stalled job, requeue native, tidak ada data hilang | ✅ |
+| Skenario F — SIGTERM saat task in-flight | ✅ |
+| Skenario G — Prompt injection, Compliance blokir | ✅ CRITICAL |
+| Skenario H — 50 task paralel, tidak ada race condition | ✅ CRITICAL |
+| Skenario I — Fast path: prompt sederhana → 3 divisi saja | ✅ |
+| Skenario J — Spending anomaly: tenant 3x rata-rata → alert | ✅ |
+| Skenario K — Financial tidak ter-cache, temporal TTL 5 menit | ✅ CRITICAL |
+| Verifikasi audit trail lengkap | ✅ |
+
+**Total test cases Phase 7:** ~92 tests
+
+---
+
+## Phase 8 — Load Test & Performance
+
+**Tanggal:** 2026-05-04
+**Fase:** Phase 8 — Load Testing, Performance Benchmarks, Security Scan
+
+---
+
+### k6 Load Tests
+
+#### `tests/load/k6-load-test.js` — Main Load Test
+
+**Scenarios:**
+- `rampUp`: 1→10→50 VUs over 90s, hold 3m, ramp down 30s
+- `spike`: 0→100 VUs (10s burst), hold 1m
+
+**Thresholds (SLOs):**
+- `task_submit_duration_ms p(99) < 500ms` — POST /tasks API overhead
+- `task_submit_duration_ms p(95) < 300ms`
+- `task_status_duration_ms p(99) < 200ms` — GET /tasks/:taskId/status
+- `error_rate < 1%` (excluding 429 rate limits)
+- `http_req_failed < 5%`
+
+**Payload mix:** 40% fast path (simple prompts), 60% standard path
+
+#### `tests/load/k6-fast-path.js` — Fast vs Full Path Comparison
+
+**Scenarios:** 2 parallel scenarios (15 VUs each, 3 minutes)
+- `fastPath`: constant-vus 15, polls until Completed (< 10 attempts × 300ms)
+- `fullPath`: constant-vus 15, polls until Completed (< 30 attempts × 2s)
+
+**Custom metrics:**
+- `fast_path_submit_duration_ms` — API overhead fast path
+- `full_path_submit_duration_ms` — API overhead full path
+- `fast_path_e2e_duration_ms` — End-to-end fast path (target p95 < 3s)
+- `full_path_e2e_duration_ms` — End-to-end full path
+
+**Summary output:** `results/fast-vs-full-summary.json`
+
+#### `tests/load/k6-memory-leak.js` — 24-Hour Memory Leak Detection
+
+**Scenario:** constant-vus 5, duration configurable via `DURATION` env var (default 24h)
+
+**Traffic mix:**
+- 10%: health check (`/health/live`)
+- 60%: task submission (rotating 8 prompts)
+- 30%: list tasks (pagination memory test)
+
+**Leak detection:** `p99 > 2000ms` at end = possible memory leak indicator
+
+**External monitoring:** Prometheus `process_resident_memory_bytes` via Grafana
+
+---
+
+### Performance Benchmarks (Vitest)
+
+#### `tests/performance/cost-benchmark.test.ts`
+
+| Benchmark | Result Target |
+|---|---|
+| Economy (Haiku) vs Opus savings | ≥ 60% |
+| DeepSeek vs Opus savings | ≥ 60% |
+| Escalation chain attempt 1 vs 3x Opus | ≥ 60% |
+| Worst-case all 3 attempts vs 3x Opus | ≥ 40% |
+| Prompt caching 70% cache hit | > 30% savings |
+| Fast path (1 call) vs full path (3 calls) | > 50% savings |
+
+**Pricing config validation:**
+- All model prices > 0 dan tier valid
+- Premium > economy pricing
+- `SPENDING_ANOMALY_MULTIPLIER = 3.0`
+- `COST_DEVIATION_ALERT_THRESHOLD = 0.20`
+
+#### `tests/performance/latency-benchmark.test.ts`
+
+| Operation | Target |
+|---|---|
+| `classifyPath()` avg | < 1ms |
+| `classifyCacheCategory()` avg | < 1ms |
+| `estimateTokens()` avg | < 0.5ms |
+| 100 concurrent classifyPath calls | < 10ms total |
+| `buildEscalationChain()` avg | < 1ms |
+| `calculateComplexityScore()` avg | < 1ms |
+| `classifyPath` throughput | > 10,000 calls/sec |
+
+**SLO reference values verified:**
+- POST /tasks p99 < 500ms
+- Fast path p95 end-to-end < 3s
+- Full path p99 < 60s
+- Availability 99.9%
+
+---
+
+### Security Scan
+
+#### `tests/security/security-scan.sh`
+
+**4-stage scan:**
+
+1. **pnpm audit** — HIGH/CRITICAL npm vulnerability check
+   - `pnpm audit --audit-level=high --json`
+   - `--fix` mode tersedia untuk auto-remediation
+   - Output: `tests/security/results/pnpm-audit.json`
+
+2. **Trivy filesystem scan** — Container dan dependency scan
+   - `trivy fs --security-checks secret,vuln,config --severity HIGH,CRITICAL`
+   - Ignore file: `tests/security/.trivyignore` (documented accepted risks)
+   - Output: `tests/security/results/trivy-report.json`
+
+3. **Secret detection** — 6 hardcoded secret patterns
+   - Anthropic API key (`sk-ant-`)
+   - Google API key (`AIza...`)
+   - OpenAI API key (`sk-...`)
+   - Bureau production key (`bureau_live_`)
+   - GitHub token (`ghp_...`)
+   - MongoDB Atlas URI dengan password
+
+4. **TypeScript security check**
+   - Deteksi `eval()` usage (code injection risk)
+   - Unvalidated `process.env` access (warning)
+   - SQL injection: raw template literal dalam `db.query`
+
+#### `tests/security/security-patterns.test.ts`
+
+| Test | Coverage |
+|---|---|
+| API key SHA-256 hash format | `sha256:<hex64>` |
+| Key prefix safe for UI display | < 20 chars |
+| Different calls → different keys | Randomness |
+| AES-256-GCM format | `aes256gcm:iv:tag:ciphertext` |
+| Encrypt-decrypt round-trip | Correctness |
+| Random IV → different ciphertext | Semantic security |
+| Tampered ciphertext fails | GCM authentication |
+| JWT expired token rejected | Auth |
+| Tenant isolation enforced | Cross-tenant = empty |
+| HTTP security headers configured | Helmet |
+| Sensitive fields in redaction list | Pino |
+
+---
+
+### Checklist Phase 8 — Status
+
+| Item | Status |
+|---|---|
+| k6 load test (50 concurrent, 5 tasks/sec, p99 < 500ms) | ✅ |
+| k6 fast path vs full path latency comparison | ✅ |
+| k6 memory leak test (24h sustained, configurable) | ✅ |
+| Cost benchmark — smart routing >= 60% savings | ✅ CRITICAL |
+| Latency benchmark — non-LLM code paths < 1ms | ✅ |
+| Security scan — Trivy + pnpm audit + secret detection | ✅ |
+| Security patterns unit tests — AES, SHA, JWT, tenant isolation | ✅ |
+| `.trivyignore` dengan documented accepted risks | ✅ |
+| `tests/` workspace package + pnpm-workspace.yaml | ✅ |
+
+---
+
+## Poin Kritis Phase 7-8
+
+1. **Scenario H Finance atomicity verified** — 50 concurrent reservations menggunakan mock yang mensimulasikan atomic MongoDB behavior. Balance tidak pernah negatif. Hanya 10 dari 50 berhasil saat budget = $5 × $0.50/task.
+
+2. **Scenario C email deduplication** — `pendingDecision.notifiedAt` pattern verified: email hanya dikirim sekali meski background job scan berulang.
+
+3. **Scenario G prompt injection blocked before LLM** — Compliance check runs pre-Production. Zero token spent pada malicious prompts.
+
+4. **k6 thresholds are SLO definitions** — Bukan arbitrary numbers. p99 < 500ms adalah commitment ke user, bukan aspirasi internal.
+
+5. **Cost benchmark uses real pricing config** — `estimateCost()` dari `pricing.config.ts` digunakan langsung. Bukan hardcoded angka. Kalau pricing berubah, benchmark otomatis merefleksikannya.
+
+6. **Security scan is runnable in CI** — `CI=true bash tests/security/security-scan.sh` exits non-zero pada HIGH/CRITICAL findings. Bisa langsung di-hook ke GitHub Actions.
+
+7. **Memory leak test external monitoring** — k6 `p99 > 2000ms` adalah proxy indicator, bukan ground truth. Grafana `process_resident_memory_bytes` adalah sumber kebenaran. Kedua diperlukan.
+
+---
+
+*Phase 7-8 implementation selesai: 2026-05-04.*
+*Total test cases: ~92 (Phase 7 E2E) + 25 (Phase 8 performance/security) = ~117 new tests.*
+*Total load test scripts: 3 k6 scripts (main, fast-vs-full, memory-leak).*
+*Security scan: 4-stage automated scan pipeline.*

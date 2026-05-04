@@ -1,0 +1,28 @@
+# Bureau Trivy Ignore File
+# Suppress known false positives and accepted risks.
+#
+# Format: CVE-YYYY-NNNNN
+# Always document WHY each entry is suppressed.
+
+# ─── Node.js / npm ────────────────────────────────────────────────────────────
+
+# Example: CVE-2023-XXXXX — Affects only browser environments, not Node.js server
+# CVE-2023-XXXXX
+
+# ─── Development dependencies only ──────────────────────────────────────────
+
+# Example: CVE affecting vitest/test runner — not in production build
+# CVE-2024-XXXXX
+
+# ─── Accepted risks with mitigations ─────────────────────────────────────────
+
+# Example: prototype pollution in legacy dep — mitigated by input sanitization
+# Add CVEs here with justification when accepted by security review
+
+# ─── Policy ──────────────────────────────────────────────────────────────────
+# Every suppressed CVE must:
+# 1. Have a documented reason
+# 2. Have a review date (no older than 90 days)
+# 3. Be approved by the security review process
+#
+# DO NOT suppress CRITICAL CVEs without security team sign-off.
