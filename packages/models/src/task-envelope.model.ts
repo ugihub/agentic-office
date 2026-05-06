@@ -5,7 +5,7 @@
  * CRITICAL: optimistic concurrency via stageVersion field.
  * Finance atomic reservation uses findOneAndUpdate + $gte (not here, in budget model).
  */
-import { Schema, model, type Document, type Types } from 'mongoose'
+import { Schema, Types, model, type Document } from 'mongoose'
 import type { TaskStage, ExecutionPath } from '@bureau/contracts'
 
 export interface TaskEnvelopeDocument extends Document {
@@ -144,11 +144,11 @@ const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
     },
     budget: {
       maxCostUsd: { type: Schema.Types.Decimal128, required: true },
-      reservedUsd: { type: Schema.Types.Decimal128, default: Schema.Types.Decimal128.fromString('0') },
+      reservedUsd: { type: Schema.Types.Decimal128, default: new Types.Decimal128('0') },
       consumed: {
         tokensIn: { type: Number, default: 0 },
         tokensOut: { type: Number, default: 0 },
-        costUsd: { type: Schema.Types.Decimal128, default: Schema.Types.Decimal128.fromString('0') },
+        costUsd: { type: Schema.Types.Decimal128, default: new Types.Decimal128('0') },
       },
       reservations: [
         {

@@ -5,7 +5,7 @@
  * In application layer: use Money type for calculations.
  * NEVER use native JS number for monetary math — floating point errors.
  */
-import Decimal from 'decimal.js'
+import { Decimal } from 'decimal.js'
 
 // Configure Decimal.js for financial precision
 Decimal.set({
@@ -15,7 +15,7 @@ Decimal.set({
   toExpPos: 20,
 })
 
-export type { Decimal }
+export { Decimal }
 
 export class Money {
   private readonly _amount: Decimal

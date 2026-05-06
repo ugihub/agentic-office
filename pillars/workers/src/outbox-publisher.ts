@@ -49,13 +49,14 @@ async function processBatch(): Promise<void> {
   await Promise.all(
     entries.map(async (entry) => {
       try {
+        const correlationId = entry.headers['x-correlation-id']
         await enqueueJob(
           entry.targetQueue as QueueName,
           entry.jobName,
           entry.jobData,
           {
             jobId: entry.outboxId, // deduplicate via BullMQ jobId
-            correlationId: entry.headers['x-correlation-id'],
+            ...(correlationId !== undefined ? { correlationId } : {}),
           },
         )
 

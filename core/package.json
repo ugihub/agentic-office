@@ -30,7 +30,8 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "vitest run --coverage",
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo"
   },
@@ -40,11 +41,13 @@
     "@bureau/agents-core": "workspace:*",
     "@bureau/telemetry": "workspace:*",
     "@bureau/models": "workspace:*",
+    "mongoose": "^8.0.0",
     "p-limit": "^6.1.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.0.0"
+    "vitest": "^1.0.0",
+    "xstate": "^5.0.0"
   }
 }

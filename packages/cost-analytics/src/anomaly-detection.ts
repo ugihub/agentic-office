@@ -44,7 +44,7 @@ export async function checkSpendingAnomaly(
       .exec()
 
     const currentHourUsd = currentHourEvents.reduce(
-      (sum, e) => sum + parseFloat(e.costUsd.toString()),
+      (sum: number, e) => sum + parseFloat(e.costUsd.toString()),
       0,
     )
 
@@ -58,7 +58,7 @@ export async function checkSpendingAnomaly(
       .exec()
 
     const sevenDayTotal = sevenDayEvents.reduce(
-      (sum, e) => sum + parseFloat(e.costUsd.toString()),
+      (sum: number, e) => sum + parseFloat(e.costUsd.toString()),
       0,
     )
 

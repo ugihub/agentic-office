@@ -17,7 +17,7 @@ export interface MongoContextOptions {
   connectOptions?: ConnectOptions
 }
 
-const DEFAULT_CONNECT_OPTIONS: ConnectOptions = {
+const DEFAULT_CONNECT_OPTIONS = {
   maxPoolSize: 10,
   minPoolSize: 2,
   serverSelectionTimeoutMS: 5000,
@@ -26,10 +26,9 @@ const DEFAULT_CONNECT_OPTIONS: ConnectOptions = {
   heartbeatFrequencyMS: 10000,
   retryWrites: true,
   w: 'majority',
-}
+} as ConnectOptions
 
 let _connection: typeof mongoose | null = null
-let _uri: string | null = null
 
 /**
  * Connect to MongoDB. Idempotent — safe to call multiple times.
@@ -47,7 +46,6 @@ export async function connectMongo(options: MongoContextOptions): Promise<typeof
   }
 
   try {
-    _uri = options.uri
     _connection = await mongoose.connect(options.uri, connectOptions)
     return _connection
   } catch (e) {
@@ -61,7 +59,6 @@ export async function disconnectMongo(): Promise<void> {
   if (_connection) {
     await mongoose.disconnect()
     _connection = null
-    _uri = null
   }
 }
 

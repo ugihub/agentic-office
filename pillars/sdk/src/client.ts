@@ -26,6 +26,10 @@ import { streamSSE } from './streaming.js'
 const DEFAULT_BASE_URL = 'https://api.bureau.id'
 const API_PREFIX = '/api/v1'
 
+type ListTasksResponse = { tasks: TaskEnvelope[] }
+type ListApiKeysResponse = { keys: ApiKey[] }
+type CreateApiKeyApiResponse = CreateApiKeyResult & { prefix?: string }
+
 export class BureauError extends Error {
   constructor(
     message: string,
@@ -111,7 +115,8 @@ export class BureauClient {
     if (opts?.limit) params.set('limit', String(opts.limit))
     if (opts?.stage) params.set('stage', opts.stage)
     const qs = params.size > 0 ? `?${params.toString()}` : ''
-    return this.fetch<TaskEnvelope[]>(`/tasks${qs}`)
+    const result = await this.fetch<TaskEnvelope[] | ListTasksResponse>(`/tasks${qs}`)
+    return Array.isArray(result) ? result : result.tasks
   }
 
   /**
@@ -234,7 +239,7 @@ export class BureauClient {
     permissions?: string[]
     expiresInDays?: number
   }): Promise<CreateApiKeyResult> {
-    return this.fetch<CreateApiKeyResult>('/auth/keys', {
+    const result = await this.fetch<CreateApiKeyApiResponse>('/auth/keys', {
       method: 'POST',
       body: JSON.stringify({
         name: opts.name,
@@ -242,22 +247,29 @@ export class BureauClient {
         expiresInDays: opts.expiresInDays,
       }),
     })
+
+    return {
+      ...result,
+      keyPrefix: result.keyPrefix ?? result.prefix ?? '',
+    }
   }
 
   /**
    * List API keys (without plaintext).
    */
   async listApiKeys(): Promise<ApiKey[]> {
-    return this.fetch<ApiKey[]>('/auth/keys')
+    const result = await this.fetch<ApiKey[] | ListApiKeysResponse>('/auth/keys')
+    return Array.isArray(result) ? result : result.keys
   }
 
   /**
    * Revoke an API key.
    */
   async revokeApiKey(keyId: string): Promise<{ revoked: boolean }> {
-    return this.fetch<{ revoked: boolean }>(`/auth/keys/${keyId}`, {
+    const result = await this.fetch<{ revoked?: boolean; status?: string }>(`/auth/keys/${keyId}`, {
       method: 'DELETE',
     })
+    return { revoked: result.revoked ?? result.status === 'revoked' }
   }
 
   /**
@@ -268,10 +280,11 @@ export class BureauClient {
     provider: string,
     plaintext: string,
   ): Promise<{ stored: boolean }> {
-    return this.fetch<{ stored: boolean }>('/auth/provider-keys', {
+    const result = await this.fetch<{ stored?: boolean; isActive?: boolean }>('/auth/provider-keys', {
       method: 'POST',
       body: JSON.stringify({ provider, plaintext }),
     })
+    return { stored: result.stored ?? result.isActive ?? true }
   }
 
   /**
@@ -285,7 +298,7 @@ export class BureauClient {
 
   // ─── Health ───────────────────────────────────────────────────────────────────
 
-  async healthCheck(): Promise<{ status: 'ok' | 'degraded' }> {
-    return this.fetch<{ status: 'ok' | 'degraded' }>('/health/ready')
+  async healthCheck(): Promise<{ status: 'ready' | 'degraded' }> {
+    return this.fetch<{ status: 'ready' | 'degraded' }>('/health/ready')
   }
 }

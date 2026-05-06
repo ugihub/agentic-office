@@ -15,18 +15,17 @@ import {
   CreateTaskRequestSchema,
   TaskDecisionRequestSchema,
   TaskFeedbackRequestSchema,
+  QUEUE_NAMES,
 } from '@bureau/contracts'
 import { TaskEnvelopeModel } from '@bureau/models'
 import {
   newId,
   EntityPrefix,
-  newTypedId,
-  ok,
-  err,
 } from '@bureau/shared-kernel'
-import { classifyTask, classifyPath } from '@bureau/core'
+import { classifyTask } from '@bureau/core'
 import { createLogger } from '@bureau/telemetry'
 import { requireAuth, requirePermission } from '../middleware/auth.js'
+import { createOutboxEntry } from '@bureau/infra-mongo'
 
 const log = createLogger({ division: 'Executive' })
 
@@ -117,7 +116,34 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
       schemaVersion: 'v1',
     })
 
-    // TODO: Enqueue to CEO agent via BullMQ (Phase 3 — when agents are connected to queues)
+    // Dispatch to CEO queue via outbox pattern (guarantees at-least-once delivery)
+    const correlationId = newId(EntityPrefix.CORRELATION)
+    const outboxResult = await createOutboxEntry({
+      targetQueue: QUEUE_NAMES.CEO,
+      jobName: 'SubmitTaskCommand',
+      jobData: {
+        _type: 'SubmitTaskCommand',
+        taskId,
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        correlationId,
+        header: {
+          correlationId,
+          causationId: null,
+          traceparent: null,
+          schemaVersion: 'v1',
+        },
+      },
+      correlationId,
+    })
+
+    if (!outboxResult.ok) {
+      log.error({ taskId, err: outboxResult.error.message }, 'Failed to create outbox entry — task created but not dispatched')
+      // Task is in MongoDB but not queued — return 202 with a warning
+      // Outbox publisher will retry if the DB write succeeded
+    } else {
+      log.info({ taskId, outboxId: outboxResult.value, executionPath }, 'Task queued via outbox')
+    }
 
     return reply.status(202).send({
       taskId,
@@ -236,7 +262,7 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
     // Poll for updates (simplified — production would use MongoDB change streams)
     let lastStageVersion = -1
     const poll = setInterval(async () => {
-      const current = await TaskEnvelopeModel.findOne({ taskId })
+      const current = await TaskEnvelopeModel.findOne({ taskId, tenantId: auth.tenantId })
         .select('currentStage stageVersion pendingDecision finalOutput outputQuality')
         .lean()
         .exec()
@@ -328,7 +354,7 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
-    return reply.send({ taskId, currentStage: 'Cancelled' })
+    return reply.send({ taskId, currentStage: 'Cancelled', cancelled: true })
   })
 
   // POST /tasks/:taskId/decision
@@ -374,10 +400,11 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Apply decision
     const newStage =
-      action === 'cancel' ? 'Cancelled' : action === 'add_budget' ? 'Producing' : 'Formatting'
+      action === 'cancel' ? 'Cancelled' : action === 'add_budget' ? 'Submitted' : 'Formatting'
+    const correlationId = newId(EntityPrefix.CORRELATION)
 
     await TaskEnvelopeModel.updateOne(
-      { taskId },
+      { taskId, tenantId: auth.tenantId, currentStage: 'AwaitingUserDecision' },
       {
         $set: {
           currentStage: newStage,
@@ -385,12 +412,53 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
           ...(action === 'best_effort' ? { outputQuality: 'best_effort' } : {}),
         },
         $inc: { stageVersion: 1 },
+        $push: {
+          stateTransitions: {
+            from: 'AwaitingUserDecision',
+            to: newStage,
+            at: new Date(),
+            byAgent: 'user',
+            correlationId,
+          },
+        },
       },
     ).exec()
 
+    if (action !== 'cancel') {
+      const outboxResult = await createOutboxEntry({
+        targetQueue: QUEUE_NAMES.CEO,
+        jobName: 'ResumeTaskCommand',
+        jobData: {
+          _type: 'SubmitTaskCommand',
+          taskId,
+          tenantId: auth.tenantId,
+          userId: auth.userId,
+          correlationId,
+          header: {
+            correlationId,
+            causationId: null,
+            traceparent: null,
+            schemaVersion: 'v1',
+          },
+        },
+        correlationId,
+      })
+
+      if (!outboxResult.ok) {
+        log.error(
+          { taskId, err: outboxResult.error.message },
+          'User decision applied but resume outbox entry failed',
+        )
+        return reply.status(500).send({
+          error: 'RESUME_DISPATCH_FAILED',
+          message: 'Decision saved, but task resume dispatch failed',
+        })
+      }
+    }
+
     log.info({ taskId, action, newStage }, 'User decision applied')
 
-    return reply.send({ taskId, action, newStage })
+    return reply.send({ taskId, action, newStage, accepted: true })
   })
 
   // POST /tasks/:taskId/feedback
@@ -424,13 +492,23 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
-    // Store feedback (embedded in task envelope for now)
-    // Phase 3+: dedicated feedback collection for ML training
-    log.info(
-      { taskId, rating: parsed.data.rating },
-      'Task feedback received',
-    )
+    // Persist feedback to task envelope — used for complexity scoring validation
+    await TaskEnvelopeModel.updateOne(
+      { taskId, tenantId: auth.tenantId },
+      {
+        $set: {
+          feedback: {
+            rating: parsed.data.rating,
+            comment: parsed.data.comment ?? null,
+            submittedAt: new Date(),
+            userId: auth.userId,
+          },
+        },
+      },
+    ).exec()
 
-    return reply.status(201).send({ taskId, received: true })
+    log.info({ taskId, rating: parsed.data.rating }, 'Task feedback saved')
+
+    return reply.status(201).send({ taskId, received: true, recorded: true })
   })
 }

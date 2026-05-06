@@ -77,18 +77,22 @@ async function apiFetch<T>(
 
 export async function submitTask(params: {
   prompt: string
-  maxCostUsd?: string
-  outputFormat?: string
-  preferredModelTier?: string
+  maxCostUsd?: string | undefined
+  outputFormat?: string | undefined
+  preferredModelTier?: string | undefined
 }): Promise<Result<TaskSubmitResponse, Error>> {
+  const constraints: Record<string, string> = {
+    maxCostUsd: params.maxCostUsd ?? '0.50',
+  }
+  if (params.preferredModelTier !== undefined) {
+    constraints['preferredModelTier'] = params.preferredModelTier
+  }
+
   return apiFetch<TaskSubmitResponse>('/api/v1/tasks', {
     method: 'POST',
     body: JSON.stringify({
       prompt: params.prompt,
-      constraints: {
-        maxCostUsd: params.maxCostUsd ?? '0.50',
-        preferredModelTier: params.preferredModelTier,
-      },
+      constraints,
       outputFormat: params.outputFormat ?? 'markdown',
     }),
   })

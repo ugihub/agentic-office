@@ -5,10 +5,11 @@
  * schemaVersion included for rolling deployments compatibility.
  */
 import { z } from 'zod'
-import { ISODateSchema, ExecutionPathSchema, DivisionSchema } from './common.js'
+import { ExecutionPathSchema } from './common.js'
 
 /** BullMQ queue names — canonical list */
 export const QUEUE_NAMES = {
+  CEO: 'bureau.ceo',
   SSC_HR: 'bureau.ssc.hr',
   SSC_FINANCE: 'bureau.ssc.finance',
   SSC_COMPLIANCE: 'bureau.ssc.compliance',
@@ -126,6 +127,19 @@ export const ReviewContentCommandSchema = z
   .strip()
 
 export type ReviewContentCommand = z.infer<typeof ReviewContentCommandSchema>
+
+/** SubmitTaskCommand — POST /tasks → bureau.ceo queue */
+export const SubmitTaskCommandSchema = z
+  .object({
+    _type: z.literal('SubmitTaskCommand'),
+    header: JobHeaderSchema,
+    taskId: z.string().min(1),
+    tenantId: z.string().min(1),
+    userId: z.string().min(1),
+  })
+  .strip()
+
+export type SubmitTaskCommand = z.infer<typeof SubmitTaskCommandSchema>
 
 /** SSE event types for client streaming */
 export const SseEventTypeSchema = z.enum([

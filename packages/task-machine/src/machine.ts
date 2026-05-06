@@ -41,6 +41,9 @@ export interface TaskContext {
     qualityEstimate: number
     escalationModel: string | null
     additionalCostUsd: string | null
+    bestEffortOutput?: { available: boolean; qualityEstimate: number }
+    escalationOption?: { available: boolean; targetModel: string; additionalCostUsd: string }
+    notifiedAt?: Date | null
     expiresAt: Date
     defaultAction: 'best_effort' | 'add_budget' | 'cancel'
   } | null
@@ -68,17 +71,18 @@ export const taskMachine = setup({
   types: {
     context: {} as TaskContext,
     events: {} as TaskEvent,
+    input: {} as TaskContext,
   },
   guards: {
     isResearchRequired: ({ context }) => context.executionPath !== 'fast',
-    canRetryQa: ({ context }) => context.retryCount.qa < MAX_QA_RETRIES,
+    canRetryQa: ({ context }) => (context.retryCount?.qa ?? 0) < MAX_QA_RETRIES - 1,
     canEscalate: (_, params: { canEscalate: boolean }) => params.canEscalate,
   },
   actions: {
     incrementQaRetry: assign({
       retryCount: ({ context }) => ({
-        ...context.retryCount,
-        qa: context.retryCount.qa + 1,
+        production: context.retryCount?.production ?? 0,
+        qa: (context.retryCount?.qa ?? 0) + 1,
       }),
     }),
     setQaFailureReason: assign({
@@ -89,7 +93,7 @@ export const taskMachine = setup({
     }),
     setFinalOutput: assign({
       finalOutput: (_, params: { output: string }) => params.output,
-      outputQuality: () => 'standard' as const,
+      outputQuality: ({ context }) => context.outputQuality ?? 'standard',
     }),
     setFinalOutputBestEffort: assign({
       finalOutput: ({ context }) => context.productionOutput,
@@ -107,6 +111,13 @@ export const taskMachine = setup({
         qualityEstimate: 0.75,
         escalationModel: params.targetModel,
         additionalCostUsd: params.additionalCostUsd,
+        bestEffortOutput: { available: true, qualityEstimate: 0.75 },
+        escalationOption: {
+          available: true,
+          targetModel: params.targetModel,
+          additionalCostUsd: params.additionalCostUsd,
+        },
+        notifiedAt: null,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         defaultAction: 'best_effort' as const,
       }),
@@ -196,6 +207,17 @@ export const taskMachine = setup({
       // QA Agent gate
       on: {
         QA_PASSED: { target: 'Formatting' },
+        BUDGET_INSUFFICIENT_FOR_ESCALATION: {
+          target: 'AwaitingUserDecision',
+          actions: {
+            type: 'setPendingDecision',
+            params: ({ event, context }) => ({
+              additionalCostUsd: event.additionalCostUsd,
+              targetModel: event.targetModel,
+              attemptNumber: context.currentAttempt,
+            }),
+          },
+        },
         QA_FAILED: [
           {
             // Can retry AND can escalate → re-enter Producing

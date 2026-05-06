@@ -11,7 +11,7 @@ describe('parseSSEEvent()', () => {
     expect(event).not.toBeNull()
     if (event) {
       expect(event.event).toBe('task.stage.changed')
-      expect((event as Record<string, unknown>)['taskId']).toBe('t1')
+      expect((event as unknown as Record<string, unknown>)['taskId']).toBe('t1')
     }
   })
 
@@ -21,7 +21,7 @@ describe('parseSSEEvent()', () => {
     expect(event).not.toBeNull()
     if (event) {
       expect(event.event).toBe('task.completed')
-      expect((event as Record<string, unknown>)['output']).toBe('Final output')
+      expect((event as unknown as Record<string, unknown>)['output']).toBe('Final output')
     }
   })
 
@@ -67,7 +67,7 @@ describe('parseSSEEvent()', () => {
     expect(event).not.toBeNull()
     if (event) {
       expect(event.event).toBe('division.progress')
-      expect((event as Record<string, unknown>)['progress']).toBe(0.4)
+      expect((event as unknown as Record<string, unknown>)['progress']).toBe(0.4)
     }
   })
 })

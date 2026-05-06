@@ -72,7 +72,7 @@ async function lookupApiKey(plaintext: string): Promise<AuthContext | null> {
 export const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorateRequest('authContext', null)
 
-  fastify.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.addHook('preHandler', async (request: FastifyRequest, _reply: FastifyReply) => {
     const apiKey = request.headers['x-api-key']
     const authHeader = request.headers.authorization
 

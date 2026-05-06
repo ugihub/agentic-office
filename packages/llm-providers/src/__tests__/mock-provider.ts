@@ -111,6 +111,7 @@ export class MockLlmProvider implements IModelProvider {
     }
 
     if (response.error) {
+      this.responses.delete(model)
       return err(response.error)
     }
 

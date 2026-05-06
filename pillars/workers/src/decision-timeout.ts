@@ -13,6 +13,7 @@
 import mongoose from 'mongoose'
 import { TaskEnvelopeModel } from '@bureau/models'
 import { createLogger } from '@bureau/telemetry'
+import { sendDecisionRequiredEmail } from './email.js'
 
 const log = createLogger({ division: 'Executive' })
 
@@ -28,6 +29,75 @@ type DefaultAction = 'best_effort' | 'cancel'
 function resolveNextStage(action: DefaultAction): string {
   if (action === 'cancel') return 'Cancelled'
   return 'Formatting' // best_effort
+}
+
+/**
+ * Notify users whose tasks entered AwaitingUserDecision but haven't been notified yet.
+ * Uses notifiedAt field to prevent duplicate sends.
+ */
+async function sendPendingNotifications(): Promise<void> {
+  const unnotified = await TaskEnvelopeModel.find({
+    currentStage: 'AwaitingUserDecision',
+    'pendingDecision.notifiedAt': null,
+  })
+    .select('taskId userId pendingDecision originalRequest')
+    .limit(50)
+    .lean()
+    .exec()
+
+  if (unnotified.length === 0) return
+
+  log.info({ count: unnotified.length }, 'Sending pending AwaitingUserDecision notifications')
+
+  await Promise.all(
+    unnotified.map(async (task) => {
+      // Atomic claim: mark notifiedAt before sending to prevent duplicate sends
+      const claimed = await TaskEnvelopeModel.findOneAndUpdate(
+        {
+          taskId: task.taskId,
+          currentStage: 'AwaitingUserDecision',
+          'pendingDecision.notifiedAt': null,
+        },
+        { $set: { 'pendingDecision.notifiedAt': new Date() } },
+        { new: true },
+      ).exec()
+
+      if (claimed === null) return // Another instance claimed it
+
+      // Resolve recipient — use NOTIFICATION_EMAIL env var as fallback for MVP
+      // In production, this would lookup user email from a user profile service
+      const recipientEmail = process.env['NOTIFICATION_EMAIL'] ?? process.env['ADMIN_EMAIL']
+      if (!recipientEmail) {
+        log.warn(
+          { taskId: task.taskId },
+          'No NOTIFICATION_EMAIL configured — decision email skipped (notifiedAt still marked)',
+        )
+        return
+      }
+
+      const expiresAt = (task.pendingDecision as { expiresAt: Date } | null)?.expiresAt ?? new Date()
+      const defaultAction = (task.pendingDecision as { defaultAction?: string } | null)?.defaultAction ?? 'best_effort'
+      const prompt = (task.originalRequest as { prompt?: string } | undefined)?.prompt ?? ''
+
+      void sendDecisionRequiredEmail({
+        to: recipientEmail,
+        userName: task.userId,
+        taskId: task.taskId,
+        taskPrompt: prompt,
+        options: [
+          { action: 'best_effort', label: 'Accept Best Effort', description: 'Deliver available output with lower quality label' },
+          { action: 'add_budget', label: 'Add Budget & Retry', description: 'Continue with a higher-tier model' },
+          { action: 'cancel', label: 'Cancel Task', description: 'Cancel and receive a full refund' },
+        ],
+        expiresAt,
+        defaultAction,
+      }).then((result) => {
+        if (!result.ok) {
+          log.error({ taskId: task.taskId, err: result.error.message }, 'Failed to send decision email')
+        }
+      })
+    }),
+  )
 }
 
 async function processExpiredDecisions(): Promise<void> {
@@ -101,6 +171,7 @@ export function startDecisionTimeoutWorker(): void {
     if (!_running) return
     try {
       if (mongoose.connection.readyState === 1) {
+        await sendPendingNotifications()
         await processExpiredDecisions()
       }
     } catch (e) {

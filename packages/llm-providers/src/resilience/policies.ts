@@ -23,7 +23,6 @@ import {
   wrap,
   handleType,
   handleWhen,
-  type IPolicy,
 } from 'cockatiel'
 import { createLogger } from '@bureau/telemetry'
 import type { LlmProvider } from '../pricing.config.js'
@@ -107,9 +106,15 @@ export function createLlmPolicy(
     },
   )
 
-  retryPolicy.onRetry(({ attempt, error }) => {
+  retryPolicy.onRetry((reason) => {
+    const errMsg =
+      'error' in reason
+        ? (reason.error as Error).message
+        : 'value' in reason
+          ? String(reason.value)
+          : 'request isolated'
     log.warn(
-      { provider, attempt, err: (error as Error).message },
+      { provider, attempt: reason.attempt, err: errMsg },
       'LLM call retrying',
     )
   })
@@ -125,9 +130,15 @@ export function createLlmPolicy(
       },
     )
 
-    breaker.onBreak(({ error }) => {
+    breaker.onBreak((reason) => {
+      const errMsg =
+        'error' in reason
+          ? (reason.error as Error).message
+          : 'value' in reason
+            ? String(reason.value)
+            : 'request isolated'
       log.error(
-        { provider, err: (error as Error).message },
+        { provider, err: errMsg },
         'Circuit breaker OPEN — LLM provider failing',
       )
     })

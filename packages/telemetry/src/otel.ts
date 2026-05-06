@@ -80,7 +80,7 @@ export async function withSpan<T>(
   fn: (span: Span) => Promise<T>,
   attributes?: Record<string, string | number | boolean>,
 ): Promise<T> {
-  return tracer.startActiveSpan(spanName, { attributes }, async (span) => {
+  return tracer.startActiveSpan(spanName, attributes !== undefined ? { attributes } : {}, async (span) => {
     try {
       const result = await fn(span)
       span.end()

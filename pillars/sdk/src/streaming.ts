@@ -53,10 +53,12 @@ export async function* streamSSE(
   headers: Record<string, string>,
   signal?: AbortSignal,
 ): AsyncGenerator<BureauSSEEvent> {
-  const res = await fetch(url, {
+  const init: RequestInit = {
     headers: { ...headers, Accept: 'text/event-stream' },
-    signal,
-  })
+  }
+  if (signal !== undefined) init.signal = signal
+
+  const res = await fetch(url, init)
 
   if (!res.ok) {
     throw new Error(`SSE stream failed: ${res.status} ${res.statusText}`)

@@ -79,9 +79,12 @@ export async function buildServer() {
   await fastify.register(healthRoutes)
   await fastify.register(taskRoutes)
   await fastify.register(authKeyRoutes)
+  await fastify.register(healthRoutes, { prefix: '/api/v1' })
+  await fastify.register(taskRoutes, { prefix: '/api/v1' })
+  await fastify.register(authKeyRoutes, { prefix: '/api/v1' })
 
   // Global error handler
-  fastify.setErrorHandler((error, request, reply) => {
+  fastify.setErrorHandler((error: Error, request, reply) => {
     // Auth/permission throws are caught here
     if (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN') {
       return // Reply already sent by requireAuth/requirePermission
@@ -151,7 +154,7 @@ function setupGracefulShutdown(
 
   installGracefulShutdown({
     drainTimeoutMs: parseInt(process.env['SHUTDOWN_DRAIN_MS'] ?? '30000', 10),
-    log: (msg, meta) => log.info(meta ?? {}, msg),
+    log: (msg: string, meta?: Record<string, unknown>) => log.info(meta ?? {}, msg),
   })
 }
 

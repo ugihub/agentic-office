@@ -90,6 +90,7 @@ export interface CreateApiKeyResult {
   name: string
   keyPrefix: string
   permissions: string[]
+  expiresAt?: string | null
 }
 
 export type DecisionAction = 'best_effort' | 'add_budget' | 'cancel'

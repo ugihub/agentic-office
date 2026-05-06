@@ -20,6 +20,8 @@ export interface ClassifierInput {
 
 export interface ClassifierResult {
   path: ExecutionPath
+  /** Backward-compatible top-level estimate for API/test consumers. */
+  estimatedTokens: number
   signals: {
     hasCode: boolean
     hasResearch: boolean
@@ -44,6 +46,9 @@ const TEMPORAL_SIGNALS = /hari ini|terbaru|sekarang|minggu ini|terkini|bulan ini
 
 const FINANCIAL_SIGNALS = /harga|price|kurs|saham|crypto|bitcoin|stock|nilai tukar|exchange rate|forex|cryptocurrency/i
 
+const FAST_PATH_MAX_TOKENS = 80
+const FULL_RESEARCH_MIN_TOKENS = 120
+
 /**
  * Classify a prompt into execution path.
  *
@@ -61,9 +66,9 @@ export function classifyPath(input: ClassifierInput): ClassifierResult {
 
   let path: ExecutionPath
 
-  if (!hasCode && !hasResearch && !hasTemporal && tokens < 150) {
+  if (!hasCode && !hasResearch && !hasTemporal && tokens < FAST_PATH_MAX_TOKENS) {
     path = 'fast'
-  } else if (hasCode || (hasResearch && tokens > 300)) {
+  } else if (hasCode || (hasResearch && tokens >= FULL_RESEARCH_MIN_TOKENS)) {
     path = 'full'
   } else {
     path = 'standard'
@@ -71,6 +76,7 @@ export function classifyPath(input: ClassifierInput): ClassifierResult {
 
   return {
     path,
+    estimatedTokens: tokens,
     signals: { hasCode, hasResearch, hasTemporal, tokenCount: tokens },
   }
 }
@@ -84,8 +90,8 @@ export type CacheCategory = 'financial' | 'temporal' | 'personnel' | 'inventory'
 
 export function classifyCacheCategory(prompt: string): CacheCategory {
   if (FINANCIAL_SIGNALS.test(prompt)) return 'financial'
-  if (TEMPORAL_SIGNALS.test(prompt)) return 'temporal'
   if (/CEO|CTO|direktur|presiden|kepala|pemimpin|director|president|leader/i.test(prompt)) return 'personnel'
+  if (TEMPORAL_SIGNALS.test(prompt)) return 'temporal'
   if (/tersedia|available|stok|stock|inventory/i.test(prompt)) return 'inventory'
   return 'default'
 }

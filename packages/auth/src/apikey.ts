@@ -10,7 +10,6 @@
  */
 import { createHash, randomBytes } from 'node:crypto'
 import { type Result, ok, err } from '@bureau/shared-kernel'
-import { ApiKeyNotFoundError, UnauthorizedError } from '@bureau/shared-kernel'
 
 export type ApiKeyEnvironment = 'live' | 'test'
 

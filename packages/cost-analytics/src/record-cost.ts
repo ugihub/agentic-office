@@ -10,7 +10,7 @@
  * This is a FINANCIAL RECORD. Do not store prompt text here.
  * Lookup via taskId → task_envelopes if prompt text needed for investigation.
  */
-import { type Result, ok, tryAsync, newId, EntityPrefix } from '@bureau/shared-kernel'
+import { type Result, tryAsync, newId, EntityPrefix } from '@bureau/shared-kernel'
 import { createLogger } from '@bureau/telemetry'
 import { CostEventModel } from '@bureau/models'
 import type { Division } from '@bureau/contracts'

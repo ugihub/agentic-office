@@ -9,7 +9,7 @@
  *
  * @see ADR-001: BullMQ-only
  */
-import Redis, { type RedisOptions } from 'ioredis'
+import { Redis, type RedisOptions } from 'ioredis'
 
 const DEFAULT_REDIS_OPTIONS: RedisOptions = {
   maxRetriesPerRequest: null,    // Required for BullMQ

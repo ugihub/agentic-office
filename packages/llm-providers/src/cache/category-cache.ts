@@ -63,16 +63,16 @@ export const TENANT_MAX_TTL: Readonly<Record<CacheCategory, number>> = {
  */
 export function classifyCacheCategory(prompt: string): CacheCategory {
   // Financial: price, exchange rate, stock, crypto — NEVER cache
-  if (/harga|price|kurs|saham|crypto|bitcoin|stock|nilai tukar|exchange rate|forex/i.test(prompt)) {
+  if (/harga|price|kurs|saham|crypto|bitcoin|stock\s+(price|market)|nilai tukar|exchange rate|forex/i.test(prompt)) {
     return 'financial'
-  }
-  // Temporal: time-sensitive data — short TTL
-  if (/hari ini|sekarang|terbaru|terkini|minggu ini|today|now|latest|current|this week/i.test(prompt)) {
-    return 'temporal'
   }
   // Personnel: leadership info — medium TTL (changes occasionally)
   if (/CEO|CTO|direktur|presiden|kepala|pemimpin|director|president|chief|founder/i.test(prompt)) {
     return 'personnel'
+  }
+  // Temporal: time-sensitive data — short TTL
+  if (/hari ini|sekarang|terbaru|terkini|minggu ini|today|now|latest|current|this week/i.test(prompt)) {
+    return 'temporal'
   }
   // Inventory: availability info — medium TTL
   if (/tersedia|available|stok|stock|inventory|in stock|out of stock/i.test(prompt)) {

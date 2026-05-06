@@ -74,11 +74,11 @@ export class GeminiProvider implements IModelProvider {
     try {
       const response = await generateText({
         model: this.google(model),
-        system: options.system,
+        ...(options.system !== undefined ? { system: options.system } : {}),
         prompt: options.prompt,
         maxTokens: options.maxTokens ?? 4096,
         temperature: options.temperature ?? 0.7,
-        abortSignal: options.signal,
+        ...(options.signal !== undefined ? { abortSignal: options.signal } : {}),
       })
 
       const tokensIn = response.usage.promptTokens
@@ -124,11 +124,11 @@ export class GeminiProvider implements IModelProvider {
 
     const response = await streamText({
       model: this.google(model),
-      system: options.system,
+      ...(options.system !== undefined ? { system: options.system } : {}),
       prompt: options.prompt,
       maxTokens: options.maxTokens ?? 4096,
       temperature: options.temperature ?? 0.7,
-      abortSignal: options.signal,
+      ...(options.signal !== undefined ? { abortSignal: options.signal } : {}),
     })
 
     for await (const chunk of response.textStream) {

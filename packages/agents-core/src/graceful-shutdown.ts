@@ -121,13 +121,13 @@ export function installGracefulShutdown(options: ShutdownOptions = {}): void {
   process.on('SIGINT', () => void shutdown('SIGINT'))
 
   // Unhandled rejection guard — log but don't crash
-  process.on('unhandledRejection', (reason) => {
+  process.on('unhandledRejection', (reason: unknown) => {
     log('[process] Unhandled promise rejection', {
       reason: reason instanceof Error ? reason.message : String(reason),
     })
   })
 
-  process.on('uncaughtException', (error) => {
+  process.on('uncaughtException', (error: Error) => {
     log('[process] Uncaught exception — initiating shutdown', {
       err: error.message,
       stack: error.stack,

@@ -11,11 +11,6 @@
  * Pattern: TOGAF Vision → Execution, per plan section 2.
  */
 import { type Result, ok, err, newId, EntityPrefix } from '@bureau/shared-kernel'
-import {
-  AgentCapacityError,
-  TaskAlreadyExistsError,
-  InsufficientBudgetError,
-} from '@bureau/shared-kernel'
 import type { IHeadAgent, AgentContext, HeadAgentOutput } from '@bureau/agents-core'
 import { createLogger } from '@bureau/telemetry'
 import { classifyPath, classifyCacheCategory } from '../../path-classifier/classifier.js'
@@ -89,11 +84,12 @@ export class CeoAgent implements IHeadAgent {
     log.info('Dispatching SSC agents in parallel')
     const sscStart = Date.now()
 
-    const sscResult = await this.deps.runSscAgents(
-      ctx,
-      'prompt', // actual prompt passed via ctx in real impl
-      '0.50',
-    )
+    // Extract prompt from extended context (set by task-processor before calling execute)
+    const extCtx = ctx as AgentContext & { prompt?: string; maxCostUsd?: string }
+    const prompt = extCtx.prompt ?? ''
+    const maxCostUsd = extCtx.maxCostUsd ?? '0.50'
+
+    const sscResult = await this.deps.runSscAgents(ctx, prompt, maxCostUsd)
 
     if (!sscResult.ok) {
       log.error({ err: sscResult.error.message }, 'SSC agents failed')

@@ -21,10 +21,19 @@ export interface WorkOrder {
   skipReason?: string | undefined
 }
 
+type LegacyDivision = Division | 'HR' | 'Finance' | 'Compliance' | 'IT'
+type LegacyWorkOrder = Omit<WorkOrder, 'division' | 'mustRunBefore' | 'canRunParallelWith'> & {
+  division: LegacyDivision
+  mustRunBefore: LegacyDivision[]
+  canRunParallelWith: LegacyDivision[]
+}
+
 export interface DecomposedPlan {
   taskId: string
   executionPath: 'fast' | 'standard' | 'full'
   divisions: WorkOrder[]
+  /** Backward-compatible alias used by older E2E tests and docs. */
+  stages: LegacyWorkOrder[]
   /** Estimated stages in execution order */
   stageSequence: string[]
 }
@@ -39,7 +48,7 @@ const FAST_PATH_DIVISIONS: WorkOrder[] = [
     canRunParallelWith: [],
   },
   {
-    division: 'Finance',
+    division: 'FinanceSSC',
     priority: 2,
     mustRunBefore: ['Production'],
     canRunParallelWith: ['Executive'],
@@ -51,7 +60,7 @@ const FAST_PATH_DIVISIONS: WorkOrder[] = [
     canRunParallelWith: [],
   },
   {
-    division: 'Compliance',
+    division: 'ComplianceSSC',
     priority: 4,
     mustRunBefore: ['Marketing'],
     canRunParallelWith: ['Production'],
@@ -69,32 +78,32 @@ const STANDARD_PATH_DIVISIONS: WorkOrder[] = [
   {
     division: 'Executive',
     priority: 1,
-    mustRunBefore: ['HR', 'Finance', 'Compliance', 'IT'],
+    mustRunBefore: ['HRSSc', 'FinanceSSC', 'ComplianceSSC', 'ITSSC'],
     canRunParallelWith: [],
   },
   {
-    division: 'HR',
+    division: 'HRSSc',
     priority: 2,
     mustRunBefore: ['Production'],
-    canRunParallelWith: ['Finance', 'Compliance', 'IT'],
+    canRunParallelWith: ['FinanceSSC', 'ComplianceSSC', 'ITSSC'],
   },
   {
-    division: 'Finance',
+    division: 'FinanceSSC',
     priority: 2,
     mustRunBefore: ['Production'],
-    canRunParallelWith: ['HR', 'Compliance', 'IT'],
+    canRunParallelWith: ['HRSSc', 'ComplianceSSC', 'ITSSC'],
   },
   {
-    division: 'Compliance',
+    division: 'ComplianceSSC',
     priority: 2,
     mustRunBefore: ['Production'],
-    canRunParallelWith: ['HR', 'Finance', 'IT'],
+    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ITSSC'],
   },
   {
-    division: 'IT',
+    division: 'ITSSC',
     priority: 2,
     mustRunBefore: ['Production'],
-    canRunParallelWith: ['HR', 'Finance', 'Compliance'],
+    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ComplianceSSC'],
   },
   {
     division: 'Production',
@@ -120,32 +129,32 @@ const FULL_PATH_DIVISIONS: WorkOrder[] = [
   {
     division: 'Executive',
     priority: 1,
-    mustRunBefore: ['HR', 'Finance', 'Compliance', 'IT'],
+    mustRunBefore: ['HRSSc', 'FinanceSSC', 'ComplianceSSC', 'ITSSC'],
     canRunParallelWith: [],
   },
   {
-    division: 'HR',
+    division: 'HRSSc',
     priority: 2,
     mustRunBefore: ['Research'],
-    canRunParallelWith: ['Finance', 'Compliance', 'IT'],
+    canRunParallelWith: ['FinanceSSC', 'ComplianceSSC', 'ITSSC'],
   },
   {
-    division: 'Finance',
+    division: 'FinanceSSC',
     priority: 2,
     mustRunBefore: ['Research'],
-    canRunParallelWith: ['HR', 'Compliance', 'IT'],
+    canRunParallelWith: ['HRSSc', 'ComplianceSSC', 'ITSSC'],
   },
   {
-    division: 'Compliance',
+    division: 'ComplianceSSC',
     priority: 2,
     mustRunBefore: ['Research'],
-    canRunParallelWith: ['HR', 'Finance', 'IT'],
+    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ITSSC'],
   },
   {
-    division: 'IT',
+    division: 'ITSSC',
     priority: 2,
     mustRunBefore: ['Research'],
-    canRunParallelWith: ['HR', 'Finance', 'Compliance'],
+    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ComplianceSSC'],
   },
   {
     division: 'Research',
@@ -263,6 +272,31 @@ export function decomposeTask(
     taskId,
     executionPath: path,
     divisions: [...divisions],
+    stages: divisions.map(toLegacyWorkOrder),
     stageSequence: [...stageSequence],
+  }
+}
+
+function toLegacyWorkOrder(order: WorkOrder): LegacyWorkOrder {
+  return {
+    ...order,
+    division: toLegacyDivision(order.division),
+    mustRunBefore: order.mustRunBefore.map(toLegacyDivision),
+    canRunParallelWith: order.canRunParallelWith.map(toLegacyDivision),
+  }
+}
+
+function toLegacyDivision(division: Division): LegacyDivision {
+  switch (division) {
+    case 'HRSSc':
+      return 'HR'
+    case 'FinanceSSC':
+      return 'Finance'
+    case 'ComplianceSSC':
+      return 'Compliance'
+    case 'ITSSC':
+      return 'IT'
+    default:
+      return division
   }
 }

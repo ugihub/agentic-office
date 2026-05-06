@@ -59,7 +59,7 @@ export const authKeyRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { name, permissions, expiresInDays, rateLimit } = parsed.data
     const generated = generateApiKey(
-      auth.tenantId.startsWith('tenant_prod') ? 'production' : 'test',
+      auth.tenantId.startsWith('tenant_prod') ? 'live' : 'test',
     )
     const keyId = newId(EntityPrefix.API_KEY)
 
@@ -92,6 +92,7 @@ export const authKeyRoutes: FastifyPluginAsync = async (fastify) => {
       keyId,
       name,
       plaintext: generated.plaintext, // only time this is exposed
+      keyPrefix: extractKeyPrefix(generated.plaintext),
       prefix: extractKeyPrefix(generated.plaintext),
       permissions,
       expiresAt: expiresAt?.toISOString() ?? null,
@@ -141,7 +142,7 @@ export const authKeyRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     log.info({ keyId, userId: auth.userId }, 'API key revoked')
-    return reply.send({ keyId, status: 'revoked' })
+    return reply.send({ keyId, status: 'revoked', revoked: true })
   })
 
   // POST /auth/provider-keys — store encrypted provider key
@@ -159,7 +160,7 @@ export const authKeyRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { provider, plaintext } = parsed.data
 
-    const encResult = encryptProviderKey(plaintext)
+    const encResult = await encryptProviderKey(plaintext)
     if (!encResult.ok) {
       log.error({ err: encResult.error.message }, 'Provider key encryption failed')
       return reply.status(500).send({ error: 'ENCRYPTION_ERROR' })
@@ -187,7 +188,7 @@ export const authKeyRoutes: FastifyPluginAsync = async (fastify) => {
     ).exec()
 
     log.info({ userId: auth.userId, provider }, 'Provider key stored')
-    return reply.status(201).send({ provider, preview, isActive: true })
+    return reply.status(201).send({ provider, preview, isActive: true, stored: true })
   })
 
   // DELETE /auth/provider-keys/:provider — remove provider key

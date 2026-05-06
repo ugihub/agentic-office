@@ -66,9 +66,9 @@ export async function enqueueJob<T extends Record<string, unknown>>(
   const queue = getQueue(queueName)
 
   const job = await queue.add(jobName, data, {
-    jobId: options?.jobId,
-    delay: options?.delay,
-    priority: options?.priority,
+    ...(options?.jobId !== undefined ? { jobId: options.jobId } : {}),
+    ...(options?.delay !== undefined ? { delay: options.delay } : {}),
+    ...(options?.priority !== undefined ? { priority: options.priority } : {}),
   })
 
   return job.id ?? ''

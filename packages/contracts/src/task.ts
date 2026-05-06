@@ -11,7 +11,6 @@ import {
   ExecutionPathSchema,
   TaskStageSchema,
   OutputQualitySchema,
-  DivisionSchema,
 } from './common.js'
 
 /** Escalation chain entry — pre-approved by Finance SSC */

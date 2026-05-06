@@ -1,7 +1,7 @@
 /**
  * BureauClient unit tests
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BureauClient, BureauError } from '../client.js'
 
 // ─── Mock fetch ───────────────────────────────────────────────────────────────
@@ -122,6 +122,16 @@ describe('BureauClient', () => {
     })
   })
 
+  describe('listTasks()', () => {
+    it('unwraps paginated server response', async () => {
+      mockResponse({ tasks: [{ taskId: 'task_001', currentStage: 'Completed' }] })
+      const tasks = await client.listTasks()
+
+      expect(tasks).toHaveLength(1)
+      expect(tasks[0]?.taskId).toBe('task_001')
+    })
+  })
+
   describe('cancelTask()', () => {
     it('POSTs to /api/v1/tasks/:taskId/cancel', async () => {
       mockResponse({ cancelled: true })
@@ -166,6 +176,14 @@ describe('BureauClient', () => {
       const [url] = mockFetch.mock.calls[0] as [string]
       expect(url).toBe('http://localhost:3001/api/v1/auth/keys')
     })
+
+    it('unwraps server keys response', async () => {
+      mockResponse({ keys: [{ keyId: 'key_001', name: 'test', keyPrefix: 'bureau_live' }] })
+      const keys = await client.listApiKeys()
+
+      expect(keys).toHaveLength(1)
+      expect(keys[0]?.keyId).toBe('key_001')
+    })
   })
 
   describe('createApiKey()', () => {
@@ -176,6 +194,13 @@ describe('BureauClient', () => {
       const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
       expect(url).toContain('/auth/keys')
       expect(init.method).toBe('POST')
+    })
+
+    it('normalizes legacy prefix field to keyPrefix', async () => {
+      mockResponse({ plaintext: 'bureau_live_xxx', keyId: 'key_001', name: 'test', prefix: 'bureau_live', permissions: [] })
+      const result = await client.createApiKey({ name: 'Test Key' })
+
+      expect(result.keyPrefix).toBe('bureau_live')
     })
   })
 

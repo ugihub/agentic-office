@@ -74,11 +74,11 @@ export class ClaudeProvider implements IModelProvider {
     try {
       const response = await generateText({
         model: this.anthropic(model),
-        system: options.system,
+        ...(options.system !== undefined ? { system: options.system } : {}),
         prompt: options.prompt,
         maxTokens: options.maxTokens ?? 4096,
         temperature: options.temperature ?? 0.7,
-        abortSignal: options.signal,
+        ...(options.signal !== undefined ? { abortSignal: options.signal } : {}),
         experimental_providerMetadata: {
           anthropic: {
             cacheControl: { type: 'ephemeral' },
@@ -131,11 +131,11 @@ export class ClaudeProvider implements IModelProvider {
 
     const response = await streamText({
       model: this.anthropic(model),
-      system: options.system,
+      ...(options.system !== undefined ? { system: options.system } : {}),
       prompt: options.prompt,
       maxTokens: options.maxTokens ?? 4096,
       temperature: options.temperature ?? 0.7,
-      abortSignal: options.signal,
+      ...(options.signal !== undefined ? { abortSignal: options.signal } : {}),
     })
 
     for await (const chunk of response.textStream) {
@@ -150,8 +150,10 @@ export class ClaudeProvider implements IModelProvider {
     const usage = await response.usage
     const tokensIn = usage.promptTokens
     const tokensOut = usage.completionTokens
+    // Streaming: providerMetadata resolves after stream finishes
+    const providerMeta = await response.experimental_providerMetadata
     const cachedTokens =
-      (response.experimental_providerMetadata?.then !== undefined ? 0 : 0)
+      (providerMeta?.['anthropic']?.['cacheReadInputTokens'] as number | undefined) ?? 0
 
     const costUsd = estimateCost(model, tokensIn, tokensOut, cachedTokens)
 

@@ -5,7 +5,7 @@
  * Collects all results — does not fail fast unless AbortSignal triggered.
  */
 import pLimit from 'p-limit'
-import { type Result, ok, err, collectResults } from '@bureau/shared-kernel'
+import { type Result, ok, err } from '@bureau/shared-kernel'
 import { AgentCapacityError } from '@bureau/shared-kernel'
 import type { IWorkerAgent, AgentContext, WorkerOutput } from './interfaces.js'
 

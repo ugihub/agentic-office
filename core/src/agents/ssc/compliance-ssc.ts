@@ -88,24 +88,24 @@ export async function runComplianceValidation(
     })
   }
 
+  validatorsRun.push('PromptInjectionValidator')
+  if (detectPromptInjection(request.prompt)) {
+    violations.push({
+      type: 'prompt_injection',
+      severity: 'high',
+      details: 'Prompt injection attempt detected',
+    })
+  }
+
   if (request.executionPath !== 'fast') {
-    // Toxicity validator
+    validatorsRun.push('FactualityValidator')
+
     validatorsRun.push('ToxicityValidator')
     if (detectToxicity(request.prompt)) {
       violations.push({
         type: 'toxicity',
         severity: 'high',
         details: 'Prompt contains high-toxicity content',
-      })
-    }
-
-    // Prompt injection validator
-    validatorsRun.push('FactualityValidator')
-    if (detectPromptInjection(request.prompt)) {
-      violations.push({
-        type: 'prompt_injection',
-        severity: 'high',
-        details: 'Prompt injection attempt detected',
       })
     }
   }
@@ -124,3 +124,5 @@ export async function runComplianceValidation(
     validatorsRun,
   })
 }
+
+export const runComplianceCheck = runComplianceValidation

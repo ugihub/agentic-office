@@ -11,7 +11,7 @@
 import { Schema, model, type Document, type Types } from 'mongoose'
 import type { Division } from '@bureau/contracts'
 
-export interface CostEventDocument extends Document {
+export interface CostEventDocument extends Omit<Document, 'model'> {
   eventId: string
   tenantId: string
   userId: string | null       // null after GDPR anonymization

@@ -20,6 +20,7 @@ import {
 } from '@bureau/agents-core'
 import { startOutboxPublisher, stopOutboxPublisher } from './outbox-publisher.js'
 import { startDecisionTimeoutWorker, stopDecisionTimeoutWorker } from './decision-timeout.js'
+import { startTaskProcessor, stopTaskProcessor } from './task-processor.js'
 
 const log = createLogger({ division: 'Executive' })
 
@@ -38,10 +39,14 @@ async function main(): Promise<void> {
   try {
     await connectMongo()
 
+    startTaskProcessor()
     startOutboxPublisher()
     startDecisionTimeoutWorker()
 
     // Register cleanup handlers (run in order on SIGTERM/SIGINT)
+    registerCleanupHandler('task-processor', async () => {
+      await stopTaskProcessor()
+    })
     registerCleanupHandler('outbox-publisher', async () => {
       stopOutboxPublisher()
     })

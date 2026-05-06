@@ -12,12 +12,10 @@
  *
  * @see Plan section 8: Atomic Budget Reservation
  */
-import type { Model, Types } from 'mongoose'
+import { Types, type Model } from 'mongoose'
 import { type Result, ok, err, newId, EntityPrefix } from '@bureau/shared-kernel'
-import { InsufficientBudgetError, BudgetExhaustedError } from '@bureau/shared-kernel'
+import { InsufficientBudgetError } from '@bureau/shared-kernel'
 import { Money } from '@bureau/shared-kernel'
-import type { IHeadAgent, AgentContext, HeadAgentOutput } from '@bureau/agents-core'
-import { createLogger } from '@bureau/telemetry'
 import type { BudgetDocument } from '@bureau/models'
 
 export interface EscalationEntry {
@@ -71,7 +69,7 @@ export async function reserveBudgetAtomic(
         periodMonth: month,
         isFrozen: false,
         // $gte condition: only proceed if sufficient balance
-        remaining: { $gte: (estimatedCost.amount as unknown as Types.Decimal128) },
+        remaining: { $gte: Types.Decimal128.fromString(estimatedDecimal) },
       },
       {
         $inc: {
@@ -98,7 +96,7 @@ export async function reserveBudgetAtomic(
       .select('remaining isFrozen')
       .exec()
 
-    const available = existing
+    const available = existing?.remaining !== undefined
       ? existing.remaining.toString()
       : '0'
 
@@ -112,11 +110,12 @@ export async function reserveBudgetAtomic(
   }
 
   // Check if we just crossed 80% warning threshold
-  const total = Money.usd(result.totalUsd.toString())
-  const remaining = Money.usd(result.remaining.toString())
-  const usagePercent = 1 - remaining.amount.div(total.amount).toNumber()
+  if (result.totalUsd !== undefined && result.remaining !== undefined) {
+    const total = Money.usd(result.totalUsd.toString())
+    const remaining = Money.usd(result.remaining.toString())
+    const usagePercent = 1 - remaining.amount.div(total.amount).toNumber()
 
-  if (usagePercent >= 0.8 && result.warningEmailSentAt === null) {
+    if (usagePercent >= 0.8 && result.warningEmailSentAt === null) {
     // Flag for email — actual send in background job
     await deps.budgetModel
       .updateOne(
@@ -124,6 +123,7 @@ export async function reserveBudgetAtomic(
         { $set: { warningEmailSentAt: now } },
       )
       .exec()
+    }
   }
 
   return ok({

@@ -222,7 +222,10 @@ export class MarketingAgent implements IHeadAgent {
     )
 
     // Step 1: Format
-    const formatResult = await this.deps.formatterWorker.execute(ctx, marketingInput)
+    const formatResult = await this.deps.formatterWorker.execute(
+      ctx,
+      marketingInput as unknown as Record<string, unknown>,
+    )
     if (!formatResult.ok) {
       log.error({ err: formatResult.error.message }, 'Formatting failed')
       return err(formatResult.error)

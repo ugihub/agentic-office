@@ -12,7 +12,6 @@
  */
 import pLimit from 'p-limit'
 import { type Result, ok, err, newId, EntityPrefix } from '@bureau/shared-kernel'
-import { AgentCapacityError } from '@bureau/shared-kernel'
 import type {
   IHeadAgent,
   IWorkerAgent,

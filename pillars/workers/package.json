@@ -18,8 +18,13 @@
     "@bureau/telemetry": "workspace:*",
     "@bureau/infra-mongo": "workspace:*",
     "@bureau/infra-messaging": "workspace:*",
+    "@bureau/agents-core": "workspace:*",
+    "@bureau/core": "workspace:*",
+    "@bureau/llm-providers": "workspace:*",
+    "@bureau/cost-analytics": "workspace:*",
     "mongoose": "^8.0.0",
-    "resend": "^3.0.0"
+    "resend": "^3.0.0",
+    "p-limit": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

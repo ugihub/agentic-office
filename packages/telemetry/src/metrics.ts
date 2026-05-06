@@ -104,7 +104,7 @@ export function incrementAwaitingDecision(tenantId: string): void {
     })
 }
 
-export function decrementAwaitingDecision(tenantId: string): void {
+export function decrementAwaitingDecision(_tenantId: string): void {
   _awaitingGauge.count = Math.max(0, _awaitingGauge.count - 1)
 }
 

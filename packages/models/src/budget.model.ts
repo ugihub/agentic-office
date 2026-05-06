@@ -7,7 +7,7 @@
  * @see ADR-002 implementation note: atomic budget
  * @see Plan section 8: Atomic Budget Reservation
  */
-import { Schema, model, type Document, type Types } from 'mongoose'
+import { Schema, Types, model, type Document } from 'mongoose'
 
 export interface BudgetDocument extends Document {
   tenantId: string
@@ -50,7 +50,7 @@ const budgetSchema = new Schema<BudgetDocument>(
     remaining: { type: Schema.Types.Decimal128, required: true },
     consumedUsd: {
       type: Schema.Types.Decimal128,
-      default: Schema.Types.Decimal128.fromString('0'),
+      default: new Types.Decimal128('0'),
     },
     reservations: [
       {

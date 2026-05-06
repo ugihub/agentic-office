@@ -3,7 +3,7 @@
  * ApiKey: hashed, for authenticating Bureau API requests.
  * UserProviderKey: AES-256-GCM encrypted, user's own LLM provider key.
  */
-import { Schema, model, type Document, type Types } from 'mongoose'
+import { Schema, Types, model, type Document } from 'mongoose'
 
 export interface ApiKeyDocument extends Document {
   keyId: string
@@ -46,7 +46,7 @@ const apiKeySchema = new Schema<ApiKeyDocument>(
       totalRequests: { type: Number, default: 0 },
       totalCostUsd: {
         type: Schema.Types.Decimal128,
-        default: Schema.Types.Decimal128.fromString('0'),
+        default: new Types.Decimal128('0'),
       },
     },
     lastUsedAt: { type: Date, default: null },

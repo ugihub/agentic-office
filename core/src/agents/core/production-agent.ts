@@ -15,7 +15,7 @@
  */
 import pLimit from 'p-limit'
 import { type Result, ok, err, newId, EntityPrefix } from '@bureau/shared-kernel'
-import { MaxRetriesExceededError, AgentCapacityError } from '@bureau/shared-kernel'
+import { MaxRetriesExceededError } from '@bureau/shared-kernel'
 import type {
   IHeadAgent,
   IWorkerAgent,
@@ -221,8 +221,8 @@ export class ProductionAgent implements IHeadAgent {
       return err(
         new MaxRetriesExceededError(
           ctx.taskId,
+          'Production',
           escalationChain.length,
-          `No escalation entry for attempt ${attemptNumber}`,
         ),
       )
     }
@@ -271,8 +271,8 @@ export class ProductionAgent implements IHeadAgent {
     // Check for failures
     const failures = chunkResults.filter((r) => !r.ok)
     if (failures.length > 0) {
-      const firstError = failures[0]
-      if (!firstError?.ok) {
+      const firstError = failures[0]!
+      if (!firstError.ok) {
         log.error(
           {
             failureCount: failures.length,

@@ -6,7 +6,14 @@
  *
  * CRITICAL: Private key MUST be in secrets manager (Doppler/Vault), not in code.
  */
-import { SignJWT, jwtVerify, importPKCS8, importSPKI, type JWTPayload } from 'jose'
+import {
+  SignJWT,
+  jwtVerify,
+  importPKCS8,
+  importSPKI,
+  type JWTPayload,
+  type KeyLike,
+} from 'jose'
 import { type Result, ok, err } from '@bureau/shared-kernel'
 import { UnauthorizedError } from '@bureau/shared-kernel'
 
@@ -30,16 +37,21 @@ export interface JwtVerifyOptions {
   audience?: string
 }
 
-let _privateKey: CryptoKey | null = null
-let _publicKey: CryptoKey | null = null
+let _privateKey: KeyLike | null = null
+let _publicKey: KeyLike | null = null
 
 /** Initialize JWT keys from PEM strings. Call at service startup. */
 export async function initJwtKeys(
   privateKeyPem: string,
   publicKeyPem: string,
-): Promise<void> {
-  _privateKey = await importPKCS8(privateKeyPem, 'RS256')
-  _publicKey = await importSPKI(publicKeyPem, 'RS256')
+): Promise<Result<void, Error>> {
+  try {
+    _privateKey = await importPKCS8(privateKeyPem, 'RS256')
+    _publicKey = await importSPKI(publicKeyPem, 'RS256')
+    return ok(undefined)
+  } catch (e) {
+    return err(e instanceof Error ? e : new Error(String(e)))
+  }
 }
 
 /**

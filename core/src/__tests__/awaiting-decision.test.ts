@@ -13,8 +13,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { createActor } from 'xstate'
-import { taskMachine } from '../../packages/task-machine/src/machine.js'
-import type { TaskContext } from '../../packages/task-machine/src/machine.js'
+import { taskMachine } from '../../../packages/task-machine/src/machine.js'
+import type { TaskContext } from '../../../packages/task-machine/src/machine.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

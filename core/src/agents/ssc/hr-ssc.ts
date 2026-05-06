@@ -9,13 +9,13 @@
  * Attempt 2: standard model (Sonnet/Gemini Pro)
  * Attempt 3: premium model (Opus/GPT-5)
  */
-import { type Result, ok, err } from '@bureau/shared-kernel'
+import { type Result, ok } from '@bureau/shared-kernel'
 import type { ExecutionPath } from '@bureau/contracts'
 
 // Model registry with pricing (USD per 1M tokens)
 const MODEL_REGISTRY = [
   {
-    id: 'claude-haiku-4-5',
+    id: 'claude-haiku-4-5-20251001',
     provider: 'anthropic',
     tier: 'economy' as const,
     inputPer1M: 1.00,
@@ -29,14 +29,6 @@ const MODEL_REGISTRY = [
     inputPer1M: 0.10,
     outputPer1M: 0.40,
     maxComplexity: 3,
-  },
-  {
-    id: 'deepseek-v3',
-    provider: 'deepseek',
-    tier: 'economy' as const,
-    inputPer1M: 0.28,
-    outputPer1M: 0.42,
-    maxComplexity: 4,
   },
   {
     id: 'claude-sonnet-4-6',
@@ -62,17 +54,15 @@ const MODEL_REGISTRY = [
     outputPer1M: 25.00,
     maxComplexity: 10,
   },
-  {
-    id: 'gpt-5',
-    provider: 'openai',
-    tier: 'premium' as const,
-    inputPer1M: 1.25,
-    outputPer1M: 10.00,
-    maxComplexity: 10,
-  },
 ] as const
 
 export type ModelTier = 'economy' | 'standard' | 'premium'
+export interface HREscalationEntry {
+  attempt: number
+  model: string
+  provider: string
+  maxCostUsd: string
+}
 
 export interface ComplexityAssessment {
   score: number         // 0-10
@@ -81,13 +71,14 @@ export interface ComplexityAssessment {
 }
 
 export interface EscalationChain {
-  entries: Array<{
-    attempt: number
-    model: string
-    provider: string
-    maxCostUsd: string
-  }>
+  entries: HREscalationEntry[]
   totalMaxCostUsd: string
+  readonly length: number
+  [index: number]: HREscalationEntry
+  map<T>(
+    callbackfn: (value: HREscalationEntry, index: number, array: HREscalationEntry[]) => T,
+    thisArg?: unknown,
+  ): T[]
 }
 
 export interface ModelSelectionResult {
@@ -189,16 +180,19 @@ export function buildEscalationChain(
   estimatedOutputTokens = 500,
 ): EscalationChain {
   const tiers: ModelTier[] = ['economy', 'standard', 'premium']
-  const startIdx = tiers.indexOf(initialTier)
+  const usesLegacyComplexityArg = arguments.length === 2 && estimatedInputTokens <= 10
+  const startTier = usesLegacyComplexityArg ? 'economy' : initialTier
+  const inputTokens = usesLegacyComplexityArg ? 1000 : estimatedInputTokens
+  const startIdx = tiers.indexOf(startTier)
 
-  const entries: EscalationChain['entries'] = []
+  const entries: HREscalationEntry[] = []
   let totalCost = 0
 
   for (let i = startIdx; i < tiers.length; i++) {
     const tier = tiers[i]!
     const model = selectInitialModel(tier)
     const costUsd =
-      (estimatedInputTokens / 1_000_000) * model.inputPer1M +
+      (inputTokens / 1_000_000) * model.inputPer1M +
       (estimatedOutputTokens / 1_000_000) * model.outputPer1M
 
     totalCost += costUsd
@@ -211,10 +205,20 @@ export function buildEscalationChain(
     })
   }
 
-  return {
+  const chain = {
     entries,
     totalMaxCostUsd: totalCost.toFixed(6),
-  }
+    get length() {
+      return entries.length
+    },
+    map: entries.map.bind(entries),
+  } as EscalationChain
+
+  entries.forEach((entry, index) => {
+    chain[index] = entry
+  })
+
+  return chain
 }
 
 /**

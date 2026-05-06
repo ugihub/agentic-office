@@ -136,8 +136,9 @@ export class MaxRetriesExceededError extends BureauError {
     readonly taskId: string,
     readonly division: string,
     readonly maxRetries: number,
+    readonly details?: string | undefined,
   ) {
-    super(`Max retries (${maxRetries}) exceeded for task ${taskId} in division ${division}`)
+    super(details ?? `Max retries (${maxRetries}) exceeded for task ${taskId} in division ${division}`)
   }
 }
 

@@ -236,7 +236,10 @@ export class QaAgent implements IHeadAgent {
 
     // Fast path: schema-only validation (lightweight)
     if (isFastPath) {
-      const schemaResult = await this.deps.schemaValidator.execute(ctx, qaInput)
+      const schemaResult = await this.deps.schemaValidator.execute(
+        ctx,
+        qaInput as unknown as Record<string, unknown>,
+      )
 
       if (!schemaResult.ok) {
         return err(schemaResult.error)
@@ -268,10 +271,11 @@ export class QaAgent implements IHeadAgent {
     }
 
     // Full/Standard path: all 3 validators in parallel
+    const workerInput = qaInput as unknown as Record<string, unknown>
     const [schemaResult, completenessResult, relevanceResult] = await Promise.all([
-      this.deps.schemaValidator.execute(ctx, qaInput),
-      this.deps.completenessChecker.execute(ctx, qaInput),
-      this.deps.relevanceChecker.execute(ctx, qaInput),
+      this.deps.schemaValidator.execute(ctx, workerInput),
+      this.deps.completenessChecker.execute(ctx, workerInput),
+      this.deps.relevanceChecker.execute(ctx, workerInput),
     ])
 
     if (ctx.signal.aborted) {
@@ -324,6 +328,7 @@ export class QaAgent implements IHeadAgent {
       return err(
         new MaxRetriesExceededError(
           ctx.taskId,
+          'QA',
           qaInput.maxRetries,
           `QA failed after ${qaInput.maxRetries} attempts: ${qaOutput.failureReasons.join('; ')}`,
         ),
