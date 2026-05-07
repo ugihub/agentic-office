@@ -13,9 +13,11 @@
 ## Daftar Isi
 
 - [Cara Penggunaan](#cara-penggunaan)
+- [Tech Stack](#tech-stack)
 - [Dependencies](#dependencies)
 - [Instalasi & Setup](#instalasi--setup)
 - [Menjalankan Secara Lokal](#menjalankan-secara-lokal)
+- [Dashboard Web UI](#dashboard-web-ui)
 - [Menggunakan TypeScript SDK](#menggunakan-typescript-sdk)
 - [Menggunakan MCP Plugin (Claude Code)](#menggunakan-mcp-plugin-claude-code)
 - [Menggunakan REST API](#menggunakan-rest-api)
@@ -23,19 +25,38 @@
 - [Struktur Repo](#struktur-repo)
 - [Divisions (Agent)](#divisions-agent)
 - [Observability](#observability)
+- [Perintah Development](#perintah-development)
 - [Contributing](#contributing)
 
 ---
 
 ## Cara Penggunaan
 
-Ada **3 cara** menggunakan Agentic Office:
+Ada **4 cara** menggunakan Agentic Office:
 
 | Cara                   | Cocok untuk                                    | Prasyarat                |
 | ---------------------- | ---------------------------------------------- | ------------------------ |
+| **Dashboard Web UI**   | Visual monitoring & submit task via browser    | Node.js + API key        |
 | **MCP Plugin**         | Pengguna Claude Code                           | Node.js + API key        |
 | **TypeScript SDK**     | Developer yang ingin integrasi ke kode sendiri | Node.js                  |
 | **Self-hosted Docker** | Tim yang ingin infrastruktur sendiri           | Docker + MongoDB + Redis |
+
+---
+
+## Tech Stack
+
+| Layer              | Teknologi                                                     |
+| ------------------ | ------------------------------------------------------------- |
+| **Backend API**    | Fastify 5, TypeScript 5, Node.js 20                           |
+| **Frontend**       | Next.js 15 (App Router), React 19, Tailwind CSS 3             |
+| **State/Realtime** | SSE (Server-Sent Events), SWR, React hooks                    |
+| **Database**       | MongoDB 7 (via Mongoose)                                      |
+| **Queue**          | BullMQ 5 (Redis-backed)                                       |
+| **Agent State**    | XState 5 state machine                                        |
+| **LLM Providers**  | Anthropic Claude (primary), OpenAI, Gemini, Mistral, DeepSeek |
+| **Observability**  | OpenTelemetry, Jaeger, Prometheus, Grafana, Pino              |
+| **Monorepo**       | Turborepo 2, pnpm workspaces                                  |
+| **CI/CD**          | GitHub Actions                                                |
 
 ---
 
@@ -72,9 +93,8 @@ Ada **3 cara** menggunakan Agentic Office:
 
 ### Package npm (otomatis via `pnpm install`)
 
-Package utama yang digunakan proyek ini:
-
 ```
+# Backend
 fastify ^5.0.0          — HTTP API server (highload, production-grade)
 @fastify/cors           — CORS handling
 @fastify/helmet         — Security headers
@@ -86,9 +106,21 @@ zod ^3.0.0              — Schema validation & type safety
 @ai-sdk/anthropic       — Vercel AI SDK untuk Anthropic
 @opentelemetry/*        — Distributed tracing (Jaeger)
 pino ^9.0.0             — Structured JSON logging
+xstate ^5.0.0           — State machine untuk agent lifecycle
+
+# Frontend (Dashboard)
+next ^15.0.0            — Next.js App Router
+react ^19.0.0           — React 19
+tailwindcss ^3.4.0      — Utility-first CSS
+swr ^2.2.0              — Data fetching + polling
+react-markdown ^9.0.0   — Render output markdown
+
+# Dev tooling
 vitest ^1.0.0           — Unit & integration testing
 turbo ^2.0.0            — Monorepo build orchestration
 typescript ^5.4.0       — TypeScript compiler
+prettier ^3.0.0         — Code formatter
+husky ^9.0.0            — Git hooks
 ```
 
 ---
@@ -207,12 +239,12 @@ docker compose ps
 pnpm build
 ```
 
-Output: 16 packages ter-compile ke `dist/` masing-masing.
+Output: semua packages ter-compile ke `dist/` masing-masing.
 
 ### 7. Jalankan Tests
 
 ```bash
-# Semua tests (135 test cases)
+# Semua tests
 pnpm test
 
 # Test package spesifik
@@ -227,7 +259,7 @@ pnpm --filter "@bureau/core" test -- --watch
 
 ## Menjalankan Secara Lokal
 
-Butuh **3 terminal** untuk menjalankan stack penuh:
+Butuh **3 terminal** untuk menjalankan backend stack penuh + **1 terminal tambahan** untuk Dashboard:
 
 **Terminal 1 — API Server**
 
@@ -250,6 +282,13 @@ pnpm --filter "@bureau/mcp-server" dev
 # MCP stdio server untuk Claude Code
 ```
 
+**Terminal 4 — Dashboard (Frontend)**
+
+```bash
+pnpm --filter "@bureau/dashboard" dev
+# Dashboard berjalan di http://localhost:3000
+```
+
 ### Verifikasi API Berjalan
 
 ```bash
@@ -268,6 +307,316 @@ Response sukses:
   "checks": { "mongodb": "ok", "redis": "ok" },
   "timestamp": "2026-05-07T00:00:00.000Z"
 }
+```
+
+---
+
+## Dashboard Web UI
+
+Dashboard adalah antarmuka visual berbasis Next.js 15 untuk memantau dan mengontrol agent secara realtime.
+
+**URL:** `http://localhost:3000`
+
+### Fitur Dashboard
+
+| Fitur              | Deskripsi                                                             |
+| ------------------ | --------------------------------------------------------------------- |
+| **Task List**      | Tabel semua task dengan status, stage, biaya, dan timestamp           |
+| **New Task Form**  | Form submit task dengan pilihan budget dan model tier                 |
+| **Task Detail**    | Halaman detail task dengan SSE realtime stream                        |
+| **Stage Progress** | Visual progress bar 7 stage (Submitted → Completed)                   |
+| **Division Cards** | 8 kartu agent (CEO, HR, Finance, dll.) dengan indikator live activity |
+| **Decision Panel** | Panel interaktif untuk Approve/Best Effort/Cancel saat eskalasi       |
+| **Event Log**      | Stream semua SSE event mentah untuk debugging                         |
+| **Settings**       | Konfigurasi API URL dan API Key, tersimpan di localStorage            |
+
+### Setup Environment Dashboard
+
+```bash
+cd apps/dashboard
+cp .env.local.example .env.local
+```
+
+Edit `apps/dashboard/.env.local`:
+
+```env
+NEXT_PUBLIC_BUREAU_API_URL=http://localhost:3001
+NEXT_PUBLIC_BUREAU_API_KEY=bureau_live_your_key_here
+```
+
+> **Catatan:** Environment variable `NEXT_PUBLIC_*` dapat di-override di runtime melalui halaman Settings (`/settings`) — nilai disimpan di `localStorage` browser.
+
+### Menjalankan Dashboard
+
+```bash
+# Development (hot reload)
+pnpm --filter "@bureau/dashboard" dev
+
+# Build production
+pnpm --filter "@bureau/dashboard" build
+
+# Start production server
+pnpm --filter "@bureau/dashboard" start
+```
+
+### Alur Penggunaan Dashboard
+
+#### 1. Submit Task Baru
+
+1. Buka `http://localhost:3000`
+2. Klik tombol **"＋ New Task"** di kanan atas atau sidebar
+3. Isi form:
+   - **Task Prompt** (wajib) — deskripsi task untuk agent
+   - **Max Budget** (opsional) — batas pengeluaran dalam USD
+   - **Model Tier** — Economy / Standard / Premium
+4. Klik **"Submit Task to Agents"**
+5. Browser otomatis redirect ke halaman detail task
+
+#### 2. Monitor Task Realtime
+
+Di halaman Task Detail (`/tasks/:id`):
+
+- **Stage Progress** — visual progress bar menunjukkan posisi task saat ini
+- **Division Cards** — kartu agent yang sedang aktif berdenyut (pulsing indicator)
+- **Event Log** — semua SSE event masuk secara realtime
+- **● live** — indikator kanan atas bahwa SSE stream aktif
+- Klik **"Cancel"** untuk membatalkan task yang berjalan
+
+#### 3. Menangani Eskalasi (AwaitingUserDecision)
+
+Saat agent memerlukan keputusan manusia:
+
+1. **Decision Panel** muncul otomatis berwarna amber
+2. Panel menampilkan:
+   - Alasan eskalasi (teks dari agent)
+   - Countdown timer (waktu sebelum timeout)
+   - Estimasi kualitas output best-effort (jika tersedia)
+   - Estimasi biaya eskalasi ke model yang lebih baik (jika tersedia)
+3. Pilih salah satu aksi:
+   - **Approve & Escalate** — tambah budget, gunakan model yang lebih baik
+   - **Use Best Effort** — terima output seadanya tanpa eskalasi
+   - **Cancel** — batalkan task
+
+#### 4. Konfigurasi API Connection
+
+Buka **Settings** (`/settings`) untuk:
+
+1. Ubah **API Server URL** (default: `http://localhost:3001`)
+2. Masukkan **API Key** (format: `bureau_live_...`)
+3. Klik **"Test Connection"** untuk verifikasi
+4. Klik **"Save Settings"** — tersimpan di localStorage
+
+---
+
+### Arsitektur Dashboard
+
+```
+apps/dashboard/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── layout.tsx          # Root layout dengan Sidebar
+│   │   ├── page.tsx            # Homepage — TaskList
+│   │   ├── globals.css         # Tailwind base styles
+│   │   ├── settings/
+│   │   │   └── page.tsx        # Settings form (API URL + Key)
+│   │   └── tasks/
+│   │       ├── new/
+│   │       │   └── page.tsx    # Form submit task baru
+│   │       └── [id]/
+│   │           └── page.tsx    # Task detail + SSE stream
+│   │
+│   ├── components/             # UI components
+│   │   ├── Sidebar.tsx         # Navigation sidebar
+│   │   ├── TaskList.tsx        # Tabel semua task (SWR polling)
+│   │   ├── TaskForm.tsx        # Form submit task
+│   │   ├── StageProgress.tsx   # Progress bar 7 stage
+│   │   ├── StageBadge.tsx      # Badge status/stage
+│   │   ├── DivisionCards.tsx   # Grid 8 kartu agent division
+│   │   ├── DecisionPanel.tsx   # Panel eskalasi dengan countdown
+│   │   └── EventLog.tsx        # Log SSE event realtime
+│   │
+│   ├── hooks/
+│   │   ├── useTaskStream.ts    # Hook SSE realtime stream
+│   │   └── useSettings.ts      # Hook baca/tulis settings localStorage
+│   │
+│   └── lib/
+│       └── bureau-client.ts    # Factory BureauClient dari @bureau/sdk
+│
+├── .env.local.example          # Template environment variables
+├── next.config.ts              # Next.js config (transpile @bureau/sdk)
+├── tailwind.config.ts          # Tema warna brand (biru)
+├── tsconfig.json               # TypeScript config (path alias @/)
+└── package.json
+```
+
+### Komponen Utama Dashboard
+
+#### `useTaskStream` Hook
+
+Hook utama untuk SSE realtime. Mengelola koneksi `BureauClient.streamTask()` dan memperbarui state React:
+
+```typescript
+// Contoh penggunaan
+const stream = useTaskStream(taskId, isActive);
+
+// stream.currentStage   — stage saat ini
+// stream.activeDivision — agent division yang sedang bekerja
+// stream.divisionMessages — pesan terakhir per division
+// stream.pendingDecision  — data eskalasi (jika AwaitingUserDecision)
+// stream.finalOutput     — output akhir task
+// stream.events          — semua SSE event raw
+// stream.done            — true jika task selesai/gagal
+// stream.error           — pesan error (jika gagal)
+```
+
+#### `bureau-client.ts`
+
+Factory function yang membaca settings (env var atau localStorage) lalu membuat instance `BureauClient`:
+
+```typescript
+import { createBureauClient } from "@/lib/bureau-client";
+
+const client = createBureauClient();
+// Menggunakan NEXT_PUBLIC_BUREAU_API_URL + NEXT_PUBLIC_BUREAU_API_KEY
+// atau nilai dari localStorage jika user sudah set via Settings page
+```
+
+#### `TaskList` Component
+
+Polling otomatis task list setiap 5 detik via SWR:
+
+```typescript
+const { data: tasks } = useSWR("tasks", fetcher, { refreshInterval: 5000 });
+```
+
+#### `DecisionPanel` Component
+
+Panel eskalasi dengan countdown timer realtime:
+
+```typescript
+// Menampilkan countdown sampai decision timeout
+// Action: "add_budget" | "best_effort" | "cancel"
+<DecisionPanel
+  taskId={taskId}
+  decision={stream.pendingDecision}
+  onSubmit={handleDecision}
+/>
+```
+
+### Menambahkan Fitur ke Dashboard
+
+#### Menambah Halaman Baru
+
+```bash
+# Buat file di app router
+touch apps/dashboard/src/app/analytics/page.tsx
+```
+
+```typescript
+// apps/dashboard/src/app/analytics/page.tsx
+export default function AnalyticsPage() {
+  return <div>Analytics</div>;
+}
+```
+
+Tambahkan ke Sidebar (`src/components/Sidebar.tsx`):
+
+```typescript
+const NAV = [
+  { href: "/", label: "Dashboard", icon: "⊞" },
+  { href: "/tasks/new", label: "New Task", icon: "＋" },
+  { href: "/analytics", label: "Analytics", icon: "📊" }, // tambahkan ini
+  { href: "/settings", label: "Settings", icon: "⚙" },
+];
+```
+
+#### Menambah Komponen Baru
+
+```bash
+touch apps/dashboard/src/components/CostChart.tsx
+```
+
+```typescript
+"use client"; // tambahkan jika perlu browser API / hooks
+import { createBureauClient } from "@/lib/bureau-client";
+
+export function CostChart() {
+  // gunakan createBureauClient() untuk fetch data
+  return <div>...</div>;
+}
+```
+
+#### Menggunakan SDK Method Baru
+
+```typescript
+import { createBureauClient } from "@/lib/bureau-client";
+
+const client = createBureauClient();
+
+// Semua method dari @bureau/sdk tersedia:
+const tasks = await client.listTasks({ limit: 100 });
+const task = await client.getTask(taskId);
+await client.cancelTask(taskId);
+await client.submitDecision(taskId, { action: "approve", reason: "..." });
+```
+
+#### Path Alias
+
+Dashboard menggunakan alias `@/` yang mengarah ke `src/`:
+
+```typescript
+import { Sidebar } from "@/components/Sidebar";
+import { useTaskStream } from "@/hooks/useTaskStream";
+import { createBureauClient } from "@/lib/bureau-client";
+```
+
+### Troubleshooting Dashboard
+
+**Dashboard tidak bisa connect ke API**
+
+```
+Failed to load tasks — check Settings → API connection
+```
+
+Solusi:
+
+1. Pastikan API server berjalan: `curl http://localhost:3001/health/ready`
+2. Buka `/settings` di dashboard
+3. Verifikasi API URL dan API Key benar
+4. Klik "Test Connection"
+
+**CORS error di browser console**
+
+Tambahkan `http://localhost:3000` ke allowed origins di API server (`pillars/api-server`).
+
+**TypeScript error: `Cannot find module '@bureau/sdk'`**
+
+```bash
+# Rebuild SDK terlebih dahulu
+pnpm --filter "@bureau/sdk" build
+
+# Kemudian restart dashboard dev server
+pnpm --filter "@bureau/dashboard" dev
+```
+
+**SSE stream tidak update**
+
+- Pastikan task ID benar (cek URL)
+- Buka DevTools → Network → filter `text/event-stream` untuk melihat SSE events
+- Pastikan task masih `running` (bukan `completed`/`failed`)
+
+**Hot reload tidak bekerja di Windows**
+
+Tambahkan ke `next.config.ts`:
+
+```typescript
+const nextConfig: NextConfig = {
+  transpilePackages: ["@bureau/sdk"],
+  webpack: (config) => {
+    config.watchOptions = { poll: 1000, aggregateTimeout: 300 };
+    return config;
+  },
+};
 ```
 
 ---
@@ -557,22 +906,22 @@ GET /health/ready   # Readiness — cek MongoDB + Redis
 ## Arsitektur
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       Client Layer                          │
-│  Claude Code (MCP)  │  TypeScript SDK  │  REST API / curl   │
-└──────────┬──────────┴────────┬─────────┴──────────┬─────────┘
-           │                  │                     │
-           ▼                  ▼                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│               Fastify API Server (:3001)                    │
-│  Auth · Rate Limit · Tenant Isolation · OpenTelemetry OTLP  │
-└──────────────────────────────┬──────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Client Layer                               │
+│  Dashboard (Next.js)  │  MCP (Claude Code)  │  SDK / REST API       │
+└──────────┬────────────┴──────────┬──────────┴──────────┬────────────┘
+           │ HTTP + SSE            │ stdio              │ HTTP
+           ▼                       ▼                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│               Fastify API Server (:3001)                            │
+│  Auth · Rate Limit · Tenant Isolation · OpenTelemetry OTLP          │
+└──────────────────────────────┬──────────────────────────────────────┘
                                │ Outbox → BullMQ jobs
                                ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Agent Orchestrator                       │
-│      XState 5 state machine · AwaitingUserDecision          │
-└──────┬─────────┬─────────┬─────────┬─────────┬─────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Agent Orchestrator                               │
+│      XState 5 state machine · AwaitingUserDecision                  │
+└──────┬─────────┬─────────┬─────────┬─────────┬─────────────────────┘
        │         │         │         │         │
        ▼         ▼         ▼         ▼         ▼
    CEO Agent  HR SSC  Finance SSC  Compliance  QA Agent
@@ -595,6 +944,7 @@ GET /health/ready   # Readiness — cek MongoDB + Redis
 - **Distroless Docker** — image minimal, non-root, tanpa shell
 - **Outbox pattern** — write MongoDB + enqueue BullMQ secara atomic; tidak ada job yang hilang
 - **`@bureau/core` framework-free** — nol import Fastify/BullMQ di domain logic
+- **SSE untuk realtime** — Dashboard menggunakan Server-Sent Events (bukan WebSocket) untuk kemudahan deployment
 
 ---
 
@@ -628,7 +978,11 @@ agentic-office/
 │   └── sdk/                # TypeScript client SDK (@bureau/sdk)
 │
 ├── apps/
-│   └── dashboard/          # Web dashboard (dalam pengembangan)
+│   └── dashboard/          # Next.js 15 Web Dashboard (port 3000)
+│       ├── src/app/        # App Router pages
+│       ├── src/components/ # UI components
+│       ├── src/hooks/      # useTaskStream, useSettings
+│       └── src/lib/        # bureau-client factory
 │
 ├── tests/
 │   ├── e2e/                # End-to-end scenarios
@@ -648,6 +1002,7 @@ agentic-office/
 │
 └── docs/
     ├── adr/                # Architecture Decision Records (ADR-001 s/d ADR-006)
+    ├── superpowers/        # Implementation plans & design specs
     └── runbook.md          # On-call operational runbook
 ```
 
@@ -705,7 +1060,7 @@ Metrics yang dimonitor:
 # Install dependencies
 pnpm install
 
-# Build semua package
+# Build semua package (termasuk dashboard)
 pnpm build
 
 # Jalankan semua tests
@@ -726,6 +1081,15 @@ pnpm clean
 # Test satu package
 pnpm --filter "@bureau/core" test
 pnpm --filter "@bureau/shared-kernel" test
+
+# Jalankan hanya dashboard dev server
+pnpm --filter "@bureau/dashboard" dev
+
+# Build hanya dashboard
+pnpm --filter "@bureau/dashboard" build
+
+# TypeCheck hanya dashboard
+pnpm --filter "@bureau/dashboard" typecheck
 
 # Load test (butuh k6 terinstall)
 pnpm --filter "@bureau/tests" load:main
