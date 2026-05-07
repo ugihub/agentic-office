@@ -135,7 +135,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
 
       - name: Build and push API server image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.api-server
@@ -158,7 +158,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
 
       - name: Build and push Workers image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.workers
