@@ -1,6 +1,6 @@
 import type { TaskStage } from "@bureau/sdk";
 
-const STAGES: TaskStage[] = [
+const FLOW_STAGES: TaskStage[] = [
   "Submitted",
   "Preparing",
   "Researching",
@@ -10,67 +10,67 @@ const STAGES: TaskStage[] = [
   "Completed",
 ];
 
-const STAGE_INDEX: Partial<Record<TaskStage, number>> = Object.fromEntries(
-  STAGES.map((s, i) => [s, i]),
+const STAGE_INDEX = new Map<TaskStage, number>(
+  FLOW_STAGES.map((s, i) => [s, i]),
 );
 
 export function StageProgress({ current }: { current: TaskStage }) {
-  const currentIdx = STAGE_INDEX[current] ?? -1;
+  const currentIdx = STAGE_INDEX.get(current) ?? -1;
 
   return (
-    <div className="w-full">
-      <div className="flex items-start">
-        {STAGES.map((stage, idx) => {
+    <div className="w-full space-y-3">
+      {/* Side-state banners */}
+      {current === "AwaitingUserDecision" && (
+        <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 text-center text-xs font-medium text-yellow-300 animate-pulse">
+          ⚠ Agent requires your decision before continuing
+        </div>
+      )}
+      {current === "Failed" && (
+        <div className="rounded-lg bg-danger/10 border border-danger/30 px-3 py-2 text-center text-xs font-medium text-red-300">
+          ✗ Task failed
+        </div>
+      )}
+      {current === "Cancelled" && (
+        <div className="rounded-lg bg-raised border border-border px-3 py-2 text-center text-xs font-medium text-muted">
+          Task cancelled
+        </div>
+      )}
+
+      {/* Segmented bar */}
+      <div className="flex items-stretch gap-0.5">
+        {FLOW_STAGES.map((stage, idx) => {
           const done = idx < currentIdx;
           const active = idx === currentIdx;
+          const pending = idx > currentIdx;
 
           return (
-            <div key={stage} className="flex flex-1 items-center">
-              <div className="flex flex-col items-center min-w-0">
-                <div
-                  className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
-                    done
-                      ? "bg-green-500 border-green-500 text-white"
-                      : active
-                        ? "bg-brand-600 border-brand-600 text-white scale-110"
-                        : "bg-white border-gray-300 text-gray-400"
-                  }`}
-                >
-                  {done ? "✓" : idx + 1}
-                </div>
-                <span
-                  className={`mt-1 text-xs font-medium text-center ${
-                    active
-                      ? "text-brand-700"
-                      : done
-                        ? "text-green-600"
-                        : "text-gray-400"
-                  }`}
-                >
-                  {stage}
-                </span>
-              </div>
-              {idx < STAGES.length - 1 && (
-                <div
-                  className={`h-0.5 flex-1 mx-1 mt-[-16px] transition-colors ${
-                    done ? "bg-green-500" : "bg-gray-200"
-                  }`}
-                />
-              )}
+            <div key={stage} className="flex-1 flex flex-col gap-1">
+              <div
+                className={`h-1.5 rounded-sm overflow-hidden ${
+                  done
+                    ? "bg-success"
+                    : active
+                      ? "shimmer-bg animate-shimmer"
+                      : "bg-raised"
+                }`}
+              />
+              <p
+                className={`text-[10px] text-center truncate ${
+                  active
+                    ? "text-brand-400 font-medium"
+                    : done
+                      ? "text-success"
+                      : pending
+                        ? "text-muted"
+                        : "text-muted"
+                }`}
+              >
+                {stage}
+              </p>
             </div>
           );
         })}
       </div>
-      {current === "AwaitingUserDecision" && (
-        <p className="mt-4 text-center text-sm font-medium text-amber-600 animate-pulse">
-          ⚠ Agent requires your decision before continuing
-        </p>
-      )}
-      {current === "Failed" && (
-        <p className="mt-4 text-center text-sm font-medium text-red-600">
-          ✗ Task failed
-        </p>
-      )}
     </div>
   );
 }
