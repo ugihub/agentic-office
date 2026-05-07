@@ -17,15 +17,20 @@
  *
  * @see ADR-005-cache-ttl-categories.md
  */
-import { createHash } from 'node:crypto'
-import type { Redis } from 'ioredis'
-import { createLogger } from '@bureau/telemetry'
+import { createHash } from "node:crypto";
+import type { Redis } from "ioredis";
+import { createLogger } from "@bureau/telemetry";
 
-const log = createLogger({ division: 'Production' })
+const log = createLogger({ division: "Production" });
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 
-export type CacheCategory = 'financial' | 'temporal' | 'personnel' | 'inventory' | 'default'
+export type CacheCategory =
+  | "financial"
+  | "temporal"
+  | "personnel"
+  | "inventory"
+  | "default";
 
 /**
  * SYSTEM_FLOOR_TTL — minimum TTL per category.
@@ -33,24 +38,24 @@ export type CacheCategory = 'financial' | 'temporal' | 'personnel' | 'inventory'
  * financial=0 means "never cache" — this cannot be overridden.
  */
 export const SYSTEM_FLOOR_TTL: Readonly<Record<CacheCategory, number>> = {
-  financial: 0,    // NEVER cache — not even for 1 second
-  temporal: 60,    // min 1 minute
-  personnel: 3_600,  // min 1 hour
-  inventory: 300,  // min 5 minutes
-  default: 3_600,  // min 1 hour
-}
+  financial: 0, // NEVER cache — not even for 1 second
+  temporal: 60, // min 1 minute
+  personnel: 3_600, // min 1 hour
+  inventory: 300, // min 5 minutes
+  default: 3_600, // min 1 hour
+};
 
 /**
  * TENANT_MAX_TTL — maximum TTL tenants can configure.
  * Tenant can set their cache TTL up to (but not exceeding) these values.
  */
 export const TENANT_MAX_TTL: Readonly<Record<CacheCategory, number>> = {
-  financial: 0,       // no override — financial is always TTL=0
-  temporal: 600,      // max 10 minutes
-  personnel: 86_400,  // max 24 hours
-  inventory: 3_600,   // max 1 hour
-  default: 604_800,   // max 7 days
-}
+  financial: 0, // no override — financial is always TTL=0
+  temporal: 600, // max 10 minutes
+  personnel: 86_400, // max 24 hours
+  inventory: 3_600, // max 1 hour
+  default: 604_800, // max 7 days
+};
 
 // ─── Classifier (same logic as path-classifier but isolated here for LLM layer) ─
 
@@ -63,22 +68,38 @@ export const TENANT_MAX_TTL: Readonly<Record<CacheCategory, number>> = {
  */
 export function classifyCacheCategory(prompt: string): CacheCategory {
   // Financial: price, exchange rate, stock, crypto — NEVER cache
-  if (/harga|price|kurs|saham|crypto|bitcoin|stock\s+(price|market)|nilai tukar|exchange rate|forex/i.test(prompt)) {
-    return 'financial'
+  if (
+    /harga|price|kurs|saham|crypto|bitcoin|stock\s+(price|market)|nilai tukar|exchange rate|forex/i.test(
+      prompt,
+    )
+  ) {
+    return "financial";
   }
   // Personnel: leadership info — medium TTL (changes occasionally)
-  if (/CEO|CTO|direktur|presiden|kepala|pemimpin|director|president|chief|founder/i.test(prompt)) {
-    return 'personnel'
+  if (
+    /CEO|CTO|direktur|presiden|kepala|pemimpin|director|president|chief|founder/i.test(
+      prompt,
+    )
+  ) {
+    return "personnel";
   }
   // Temporal: time-sensitive data — short TTL
-  if (/hari ini|sekarang|terbaru|terkini|minggu ini|today|now|latest|current|this week/i.test(prompt)) {
-    return 'temporal'
+  if (
+    /hari ini|sekarang|terbaru|terkini|minggu ini|today|now|latest|current|this week/i.test(
+      prompt,
+    )
+  ) {
+    return "temporal";
   }
   // Inventory: availability info — medium TTL
-  if (/tersedia|available|stok|stock|inventory|in stock|out of stock/i.test(prompt)) {
-    return 'inventory'
+  if (
+    /tersedia|available|stok|stock|inventory|in stock|out of stock/i.test(
+      prompt,
+    )
+  ) {
+    return "inventory";
   }
-  return 'default'
+  return "default";
 }
 
 /**
@@ -88,35 +109,38 @@ export function classifyCacheCategory(prompt: string): CacheCategory {
  * @param tenantOverrideSec - Tenant-configured TTL (optional)
  * @returns Effective TTL in seconds. 0 means do not cache.
  */
-export function effectiveTtl(category: CacheCategory, tenantOverrideSec?: number | undefined): number {
-  const floor = SYSTEM_FLOOR_TTL[category]
+export function effectiveTtl(
+  category: CacheCategory,
+  tenantOverrideSec?: number | undefined,
+): number {
+  const floor = SYSTEM_FLOOR_TTL[category];
 
   // Financial: always 0, regardless of tenant override
-  if (floor === 0) return 0
+  if (floor === 0) return 0;
 
   if (tenantOverrideSec === undefined) {
-    return floor
+    return floor;
   }
 
-  const max = TENANT_MAX_TTL[category]
+  const max = TENANT_MAX_TTL[category];
   // Clamp: max(floor, min(tenant, max))
-  return Math.max(floor, Math.min(tenantOverrideSec, max))
+  return Math.max(floor, Math.min(tenantOverrideSec, max));
 }
 
 // ─── Cache implementation ─────────────────────────────────────────────────────
 
 export interface CachedResponse {
-  text: string
-  modelUsed: string
-  tokensIn: number
-  tokensOut: number
-  cachedAt: number
-  category: CacheCategory
+  text: string;
+  modelUsed: string;
+  tokensIn: number;
+  tokensOut: number;
+  cachedAt: number;
+  category: CacheCategory;
 }
 
 export interface CacheOptions {
   /** Tenant TTL override in seconds (per category) */
-  tenantTtl?: Partial<Record<CacheCategory, number>> | undefined
+  tenantTtl?: Partial<Record<CacheCategory, number>> | undefined;
 }
 
 /**
@@ -129,11 +153,11 @@ export class CategoryCache {
    * Generate a cache key for a model + prompt combination.
    */
   cacheKey(model: string, prompt: string): string {
-    const hash = createHash('sha256')
+    const hash = createHash("sha256")
       .update(`${model}:${prompt}`)
-      .digest('hex')
-      .slice(0, 32) // 32 hex chars = 128 bits, sufficient for dedup
-    return `llm:cache:${hash}`
+      .digest("hex")
+      .slice(0, 32); // 32 hex chars = 128 bits, sufficient for dedup
+    return `llm:cache:${hash}`;
   }
 
   /**
@@ -147,28 +171,31 @@ export class CategoryCache {
     prompt: string,
     options: CacheOptions = {},
   ): Promise<CachedResponse | null> {
-    const category = classifyCacheCategory(prompt)
-    const ttl = effectiveTtl(category, options.tenantTtl?.[category])
+    const category = classifyCacheCategory(prompt);
+    const ttl = effectiveTtl(category, options.tenantTtl?.[category]);
 
     // Financial and TTL=0: never even check cache
     if (ttl === 0) {
-      log.debug({ category }, 'Cache bypass: TTL=0 (financial or zero-TTL category)')
-      return null
+      log.debug(
+        { category },
+        "Cache bypass: TTL=0 (financial or zero-TTL category)",
+      );
+      return null;
     }
 
-    const key = this.cacheKey(model, prompt)
+    const key = this.cacheKey(model, prompt);
 
     try {
-      const cached = await this.redis.get(key)
-      if (!cached) return null
+      const cached = await this.redis.get(key);
+      if (!cached) return null;
 
-      const parsed = JSON.parse(cached) as CachedResponse
-      log.debug({ key: key.slice(0, 16), category, model }, 'Cache HIT')
-      return parsed
+      const parsed = JSON.parse(cached) as CachedResponse;
+      log.debug({ key: key.slice(0, 16), category, model }, "Cache HIT");
+      return parsed;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      log.warn({ err: msg }, 'Cache get failed (non-fatal)')
-      return null
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn({ err: msg }, "Cache get failed (non-fatal)");
+      return null;
     }
   }
 
@@ -179,30 +206,30 @@ export class CategoryCache {
   async set(
     model: string,
     prompt: string,
-    response: Omit<CachedResponse, 'cachedAt' | 'category'>,
+    response: Omit<CachedResponse, "cachedAt" | "category">,
     options: CacheOptions = {},
   ): Promise<void> {
-    const category = classifyCacheCategory(prompt)
-    const ttl = effectiveTtl(category, options.tenantTtl?.[category])
+    const category = classifyCacheCategory(prompt);
+    const ttl = effectiveTtl(category, options.tenantTtl?.[category]);
 
     if (ttl === 0) {
       // Silently skip — do not log warning (this is expected behavior, not an error)
-      return
+      return;
     }
 
-    const key = this.cacheKey(model, prompt)
+    const key = this.cacheKey(model, prompt);
     const entry: CachedResponse = {
       ...response,
       cachedAt: Date.now(),
       category,
-    }
+    };
 
     try {
-      await this.redis.set(key, JSON.stringify(entry), 'EX', ttl)
-      log.debug({ key: key.slice(0, 16), category, ttl, model }, 'Cache SET')
+      await this.redis.set(key, JSON.stringify(entry), "EX", ttl);
+      log.debug({ key: key.slice(0, 16), category, ttl, model }, "Cache SET");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      log.warn({ err: msg }, 'Cache set failed (non-fatal)')
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn({ err: msg }, "Cache set failed (non-fatal)");
     }
   }
 
@@ -210,9 +237,9 @@ export class CategoryCache {
    * Invalidate a specific cache entry.
    */
   async invalidate(model: string, prompt: string): Promise<void> {
-    const key = this.cacheKey(model, prompt)
+    const key = this.cacheKey(model, prompt);
     try {
-      await this.redis.del(key)
+      await this.redis.del(key);
     } catch {
       // Non-fatal
     }

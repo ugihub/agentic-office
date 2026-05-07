@@ -7,4 +7,4 @@ export {
   type ClassifierInput,
   type ClassifierResult,
   type CacheCategory,
-} from './classifier.js'
+} from "./classifier.js";

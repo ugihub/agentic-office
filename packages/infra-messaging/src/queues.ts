@@ -6,46 +6,49 @@
  *
  * @see ADR-001: BullMQ-only — queue list is canonical here
  */
-import { Queue, type QueueOptions } from 'bullmq'
-import type { QUEUE_NAMES } from '@bureau/contracts'
-import { getRedisConnection } from './redis.js'
+import { Queue, type QueueOptions } from "bullmq";
+import type { QUEUE_NAMES } from "@bureau/contracts";
+import { getRedisConnection } from "./redis.js";
 
-type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES]
+type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
 const DEFAULT_QUEUE_OPTIONS: Partial<QueueOptions> = {
   defaultJobOptions: {
     attempts: 3,
     backoff: {
-      type: 'exponential',
+      type: "exponential",
       delay: 1000,
     },
     removeOnComplete: {
-      age: 86400,    // Keep completed jobs 24h for audit
+      age: 86400, // Keep completed jobs 24h for audit
       count: 1000,
     },
-    removeOnFail: false,   // Keep failed jobs for dead letter inspection
+    removeOnFail: false, // Keep failed jobs for dead letter inspection
   },
-}
+};
 
-const _queues = new Map<string, Queue>()
+const _queues = new Map<string, Queue>();
 
 /**
  * Get or create a BullMQ Queue instance.
  * Queues are singletons — safe to call multiple times with same name.
  */
-export function getQueue(name: QueueName, options?: Partial<QueueOptions>): Queue {
+export function getQueue(
+  name: QueueName,
+  options?: Partial<QueueOptions>,
+): Queue {
   if (_queues.has(name)) {
-    return _queues.get(name) as Queue
+    return _queues.get(name) as Queue;
   }
 
   const queue = new Queue(name, {
     ...DEFAULT_QUEUE_OPTIONS,
     ...options,
     connection: getRedisConnection(),
-  })
+  });
 
-  _queues.set(name, queue)
-  return queue
+  _queues.set(name, queue);
+  return queue;
 }
 
 /**
@@ -57,26 +60,26 @@ export async function enqueueJob<T extends Record<string, unknown>>(
   jobName: string,
   data: T,
   options?: {
-    jobId?: string
-    delay?: number
-    priority?: number
-    correlationId?: string
+    jobId?: string;
+    delay?: number;
+    priority?: number;
+    correlationId?: string;
   },
 ): Promise<string> {
-  const queue = getQueue(queueName)
+  const queue = getQueue(queueName);
 
   const job = await queue.add(jobName, data, {
     ...(options?.jobId !== undefined ? { jobId: options.jobId } : {}),
     ...(options?.delay !== undefined ? { delay: options.delay } : {}),
     ...(options?.priority !== undefined ? { priority: options.priority } : {}),
-  })
+  });
 
-  return job.id ?? ''
+  return job.id ?? "";
 }
 
 /** Close all queues gracefully */
 export async function closeAllQueues(): Promise<void> {
-  const closePromises = Array.from(_queues.values()).map((q) => q.close())
-  await Promise.all(closePromises)
-  _queues.clear()
+  const closePromises = Array.from(_queues.values()).map((q) => q.close());
+  await Promise.all(closePromises);
+  _queues.clear();
 }

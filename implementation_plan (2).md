@@ -1,4 +1,5 @@
 # Bureau — Implementation Plan
+
 ## Platform Multi-Agent AI Otonom dengan Arsitektur Perusahaan Korporat
 
 **Versi:** 4.0 (Post-Architecture Review)
@@ -32,13 +33,14 @@
 **Bureau** adalah platform multi-agent AI yang mensimulasikan struktur perusahaan korporat nyata. Ketika user mengirim satu prompt, sistem mendistribusikan pekerjaan ke tujuh divisi AI yang bekerja secara hierarkis dan paralel.
 
 Sistem ini dirancang dengan tiga cara distribusi sekaligus:
+
 - **Plugin** untuk Claude Code, Gemini CLI, dan Codex via MCP
 - **SaaS** dengan API key dan billing bulanan
 - **Open Source** self-hosted via GitHub
 
 Ketiganya menggunakan satu paket inti yang sama: `@bureau/core`.
 
-**Filosofi implementasi [NEW]:** Abstraksi yang baik ditemukan, bukan dirancang. Setiap generalisasi baru harus punya dua contoh konkret sebelum diabstraksi. Pertanyaan yang ditempel di monitor: *"Apakah ini butuh ada hari ini untuk demo besok?"*
+**Filosofi implementasi [NEW]:** Abstraksi yang baik ditemukan, bukan dirancang. Setiap generalisasi baru harus punya dua contoh konkret sebelum diabstraksi. Pertanyaan yang ditempel di monitor: _"Apakah ini butuh ada hari ini untuk demo besok?"_
 
 ---
 
@@ -48,13 +50,13 @@ Ketiganya menggunakan satu paket inti yang sama: `@bureau/core`.
 
 Fondasi filosofis sistem ini diambil dari dokumen riset **"Analisis Komprehensif Arsitektur Organisasi"**:
 
-| Konsep dari Dokumen Riset | Implementasi di Bureau |
-|---|---|
-| Shared Services Center (SSC) | Agent HR, Finance, Compliance, IT yang selalu hidup melayani semua proyek |
+| Konsep dari Dokumen Riset          | Implementasi di Bureau                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| Shared Services Center (SSC)       | Agent HR, Finance, Compliance, IT yang selalu hidup melayani semua proyek |
 | Standard Operating Procedure (SOP) | System prompt setiap agent — instruksi permanen yang mendefinisikan peran |
-| TOGAF — fase Vision ke Execution | Urutan langkah CEO Agent saat menerima proyek baru |
-| ERP Single Source of Truth | MongoDB sebagai satu-satunya tempat semua state disimpan |
-| Proses Inti vs Proses Pendukung | Core agents (spawn per proyek) vs SSC agents (selalu hidup) |
+| TOGAF — fase Vision ke Execution   | Urutan langkah CEO Agent saat menerima proyek baru                        |
+| ERP Single Source of Truth         | MongoDB sebagai satu-satunya tempat semua state disimpan                  |
+| Proses Inti vs Proses Pendukung    | Core agents (spawn per proyek) vs SSC agents (selalu hidup)               |
 
 ### Tiga Pilar
 
@@ -88,32 +90,32 @@ Fondasi filosofis sistem ini diambil dari dokumen riset **"Analisis Komprehensif
 
 ### Keputusan Stack dan Justifikasinya [REVISED]
 
-| Lapisan | Teknologi | Justifikasi |
-|---|---|---|
-| Runtime | Node.js 20 LTS | Stabilitas jangka panjang, worker_threads native |
-| Bahasa | TypeScript 5.4+ (strict) | Type safety end-to-end via shared contracts |
-| Pilar 1 — Plugin | `@modelcontextprotocol/sdk` | Standar MCP resmi, kompatibel Claude Code dan Gemini CLI |
-| Pilar 2 — API Server | Fastify 5 | Lebih ringan dari Express, schema-first, performa tinggi |
-| Pilar 2 — Dashboard | Next.js 15 App Router | API dan UI dalam satu deployment, SSE native |
-| **Message Bus** | **BullMQ (Redis 7) — saja** | **[REVISED] RabbitMQ dihapus dari MVP. BullMQ cukup untuk semua kebutuhan antar-divisi dalam satu cluster. RabbitMQ ditambahkan nanti kalau butuh cross-cluster broadcast.** |
-| Database Utama | MongoDB Atlas (Mongoose 8) | Dokumen bersarang dinamis, replica set, TTL index |
-| Paralelisme I/O | p-limit + Promise.all | Concurrency control untuk panggilan LLM |
-| Paralelisme CPU | Piscina (worker_threads) | Thread OS sejati untuk parsing, hashing, embedding |
-| Validasi | Zod 3 — `.strip()` sebagai default | Runtime validation + TypeScript inference. Strip unknown fields, tidak error. |
-| State Machine | XState 5 | Lifecycle task yang explicit dan persistable |
-| LLM Streaming | Vercel AI SDK | Zero-overhead, support semua provider |
-| Resilience | Cockatiel | Retry eksponensial, circuit breaker, bulkhead |
-| Cache | Redis (ioredis) + Upstash Vector | Category-based TTL (lihat bagian 8), semantic cache 95% threshold |
-| Auth | JWT RS256 + jose | Token signing dengan rotasi kunci |
-| Logging | Pino + pino-pretty | Structured JSON, `logger.child({ taskId, correlationId, division })` |
-| Telemetri | OpenTelemetry + Jaeger | Distributed tracing end-to-end |
-| Metrics | Prometheus + Grafana | Dashboard per divisi, cost burn rate per tenant |
-| Email Transaksional | **Resend atau Postmark** | **[NEW] Untuk notifikasi AwaitingUserDecision. Satu API call, tidak perlu infrastructure email sendiri.** |
-| Monorepo | Turborepo + pnpm workspaces | Build cache, task pipeline, incremental build |
-| Testing | Vitest + Testcontainers + k6 | Unit, integration, load test |
-| CI/CD | GitHub Actions + ArgoCD | Build ke test ke scan ke staging ke prod |
-| Secrets | Doppler / HashiCorp Vault | Tidak ada secret di codebase |
-| Container | Docker multi-stage (distroless) | Image kurang dari 150MB, non-root, read-only fs |
+| Lapisan              | Teknologi                          | Justifikasi                                                                                                                                                                  |
+| -------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime              | Node.js 20 LTS                     | Stabilitas jangka panjang, worker_threads native                                                                                                                             |
+| Bahasa               | TypeScript 5.4+ (strict)           | Type safety end-to-end via shared contracts                                                                                                                                  |
+| Pilar 1 — Plugin     | `@modelcontextprotocol/sdk`        | Standar MCP resmi, kompatibel Claude Code dan Gemini CLI                                                                                                                     |
+| Pilar 2 — API Server | Fastify 5                          | Lebih ringan dari Express, schema-first, performa tinggi                                                                                                                     |
+| Pilar 2 — Dashboard  | Next.js 15 App Router              | API dan UI dalam satu deployment, SSE native                                                                                                                                 |
+| **Message Bus**      | **BullMQ (Redis 7) — saja**        | **[REVISED] RabbitMQ dihapus dari MVP. BullMQ cukup untuk semua kebutuhan antar-divisi dalam satu cluster. RabbitMQ ditambahkan nanti kalau butuh cross-cluster broadcast.** |
+| Database Utama       | MongoDB Atlas (Mongoose 8)         | Dokumen bersarang dinamis, replica set, TTL index                                                                                                                            |
+| Paralelisme I/O      | p-limit + Promise.all              | Concurrency control untuk panggilan LLM                                                                                                                                      |
+| Paralelisme CPU      | Piscina (worker_threads)           | Thread OS sejati untuk parsing, hashing, embedding                                                                                                                           |
+| Validasi             | Zod 3 — `.strip()` sebagai default | Runtime validation + TypeScript inference. Strip unknown fields, tidak error.                                                                                                |
+| State Machine        | XState 5                           | Lifecycle task yang explicit dan persistable                                                                                                                                 |
+| LLM Streaming        | Vercel AI SDK                      | Zero-overhead, support semua provider                                                                                                                                        |
+| Resilience           | Cockatiel                          | Retry eksponensial, circuit breaker, bulkhead                                                                                                                                |
+| Cache                | Redis (ioredis) + Upstash Vector   | Category-based TTL (lihat bagian 8), semantic cache 95% threshold                                                                                                            |
+| Auth                 | JWT RS256 + jose                   | Token signing dengan rotasi kunci                                                                                                                                            |
+| Logging              | Pino + pino-pretty                 | Structured JSON, `logger.child({ taskId, correlationId, division })`                                                                                                         |
+| Telemetri            | OpenTelemetry + Jaeger             | Distributed tracing end-to-end                                                                                                                                               |
+| Metrics              | Prometheus + Grafana               | Dashboard per divisi, cost burn rate per tenant                                                                                                                              |
+| Email Transaksional  | **Resend atau Postmark**           | **[NEW] Untuk notifikasi AwaitingUserDecision. Satu API call, tidak perlu infrastructure email sendiri.**                                                                    |
+| Monorepo             | Turborepo + pnpm workspaces        | Build cache, task pipeline, incremental build                                                                                                                                |
+| Testing              | Vitest + Testcontainers + k6       | Unit, integration, load test                                                                                                                                                 |
+| CI/CD                | GitHub Actions + ArgoCD            | Build ke test ke scan ke staging ke prod                                                                                                                                     |
+| Secrets              | Doppler / HashiCorp Vault          | Tidak ada secret di codebase                                                                                                                                                 |
+| Container            | Docker multi-stage (distroless)    | Image kurang dari 150MB, non-root, read-only fs                                                                                                                              |
 
 ### ADR: Keputusan BullMQ-only [NEW]
 
@@ -127,16 +129,18 @@ Sebelum baris bisnis apapun ditulis, pattern ini dikunci di `@bureau/shared-kern
 // packages/shared-kernel/src/result.ts
 export type Result<T, E = Error> =
   | { ok: true; value: T }
-  | { ok: false; error: E }
+  | { ok: false; error: E };
 
-export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value })
-export const err = <E>(error: E): Result<never, E> => ({ ok: false, error })
+export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
+export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 
-export async function tryAsync<T>(fn: () => Promise<T>): Promise<Result<T, Error>> {
+export async function tryAsync<T>(
+  fn: () => Promise<T>,
+): Promise<Result<T, Error>> {
   try {
-    return ok(await fn())
+    return ok(await fn());
   } catch (e) {
-    return err(e instanceof Error ? e : new Error(String(e)))
+    return err(e instanceof Error ? e : new Error(String(e)));
   }
 }
 ```
@@ -149,17 +153,17 @@ Correlation ID dan taskId harus ada dari hari pertama karena ini cross-cutting c
 
 ```typescript
 // packages/telemetry/src/logger.ts
-import pino from 'pino'
+import pino from "pino";
 
-const base = pino({ level: process.env.LOG_LEVEL ?? 'info' })
+const base = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 export function createLogger(ctx: {
-  taskId?: string
-  correlationId?: string
-  division?: string
-  agentId?: string
+  taskId?: string;
+  correlationId?: string;
+  division?: string;
+  agentId?: string;
 }) {
-  return base.child(ctx)
+  return base.child(ctx);
 }
 
 // Konvensi field name wajib konsisten di seluruh codebase:
@@ -250,18 +254,21 @@ Finance SSC selalu terlibat di kedua path — budget check tidak bisa di-skip.
 
 **Kriteria fast path (rule-based classifier):**
 
-```typescript
-function classifyPath(prompt: string): 'fast' | 'standard' | 'full' {
-  const tokens = estimateTokens(prompt)
-  const hasCode = /```|function |class |import |SELECT |CREATE /.test(prompt)
-  const hasResearch = /analisis|riset|bandingkan|tren|kompetitor|data|statistik/i.test(prompt)
-  const hasTemporal = /hari ini|terbaru|sekarang|minggu ini|terkini/i.test(prompt)
+````typescript
+function classifyPath(prompt: string): "fast" | "standard" | "full" {
+  const tokens = estimateTokens(prompt);
+  const hasCode = /```|function |class |import |SELECT |CREATE /.test(prompt);
+  const hasResearch =
+    /analisis|riset|bandingkan|tren|kompetitor|data|statistik/i.test(prompt);
+  const hasTemporal = /hari ini|terbaru|sekarang|minggu ini|terkini/i.test(
+    prompt,
+  );
 
-  if (!hasCode && !hasResearch && !hasTemporal && tokens < 150) return 'fast'
-  if (hasCode || (hasResearch && tokens > 300)) return 'full'
-  return 'standard'
+  if (!hasCode && !hasResearch && !hasTemporal && tokens < 150) return "fast";
+  if (hasCode || (hasResearch && tokens > 300)) return "full";
+  return "standard";
 }
-```
+````
 
 LLM confidence score hanya dipakai untuk borderline case antara `standard` dan `full` — bukan untuk gating fast path. Alasan: overhead satu LLM call untuk menentukan apakah perlu LLM call itu kontraproduktif saat load tinggi.
 
@@ -369,15 +376,19 @@ Marketing Agent — Pipeline (berurutan)
 
 ```typescript
 // Konfigurasi wajib di setiap Worker — menggantikan heartbeat custom
-const worker = new Worker('production', async (job) => {
-  const isRequeue = job.attemptsMade > 0
-  const attemptReason = isRequeue ? 'stall_requeue' : 'initial'
-  // ... catat ke agent_executions
-}, {
-  lockDuration: 60000,      // 60 detik lock per job
-  stalledInterval: 30000,   // cek stalled setiap 30 detik
-  maxStalledCount: 2        // retry max 2x sebelum failed
-})
+const worker = new Worker(
+  "production",
+  async (job) => {
+    const isRequeue = job.attemptsMade > 0;
+    const attemptReason = isRequeue ? "stall_requeue" : "initial";
+    // ... catat ke agent_executions
+  },
+  {
+    lockDuration: 60000, // 60 detik lock per job
+    stalledInterval: 30000, // cek stalled setiap 30 detik
+    maxStalledCount: 2, // retry max 2x sebelum failed
+  },
+);
 
 // Tidak ada heartbeat custom. BullMQ native menangani stalled detection.
 // Redis boundary rule: Redis untuk ephemeral (BullMQ jobs, cache, rate limit).
@@ -661,22 +672,24 @@ async function anonymizeUserData(userId: string) {
   // cost_analytics: null-kan userId, pertahankan data finansial
   await CostEvent.updateMany(
     { userId },
-    { $set: { userId: null, anonymizedAt: new Date() } }
-  )
+    { $set: { userId: null, anonymizedAt: new Date() } },
+  );
 
   // task_envelopes: anonymize prompt dan output
   await TaskEnvelope.updateMany(
     { userId },
-    { $set: {
-      'originalRequest.prompt': '[REDACTED]',
-      finalOutput: '[REDACTED]',
-      anonymizedAt: new Date()
-    }}
-  )
+    {
+      $set: {
+        "originalRequest.prompt": "[REDACTED]",
+        finalOutput: "[REDACTED]",
+        anonymizedAt: new Date(),
+      },
+    },
+  );
 
   // Hard delete untuk data yang genuinely personal tanpa audit trail value
-  await UserProviderKey.deleteMany({ userId })
-  await ApiKey.deleteMany({ ownerId: userId })
+  await UserProviderKey.deleteMany({ userId });
+  await ApiKey.deleteMany({ ownerId: userId });
 }
 ```
 
@@ -689,23 +702,23 @@ async function anonymizeUserData(userId: string) {
 
 ### Endpoint Utama [REVISED]
 
-| Method | Path | Fungsi | Scope |
-|---|---|---|---|
-| `POST` | `/tasks` | Submit task baru | `task:write` |
-| `GET` | `/tasks` | List task | `task:read` |
-| `GET` | `/tasks/:taskId` | Envelope lengkap | `task:read` |
-| `GET` | `/tasks/:taskId/status` | Status + pending decision | `task:read` |
-| `GET` | `/tasks/:taskId/stream` | SSE real-time | `task:read` |
-| `GET` | `/tasks/:taskId/audit` | Log antar-agent (paginated) | `task:read` |
-| `GET` | `/tasks/:taskId/executions` | Detail worker per divisi | `task:read` |
-| `POST` | `/tasks/:taskId/cancel` | Batalkan task | `task:write` |
+| Method     | Path                          | Fungsi                                    | Scope        |
+| ---------- | ----------------------------- | ----------------------------------------- | ------------ |
+| `POST`     | `/tasks`                      | Submit task baru                          | `task:write` |
+| `GET`      | `/tasks`                      | List task                                 | `task:read`  |
+| `GET`      | `/tasks/:taskId`              | Envelope lengkap                          | `task:read`  |
+| `GET`      | `/tasks/:taskId/status`       | Status + pending decision                 | `task:read`  |
+| `GET`      | `/tasks/:taskId/stream`       | SSE real-time                             | `task:read`  |
+| `GET`      | `/tasks/:taskId/audit`        | Log antar-agent (paginated)               | `task:read`  |
+| `GET`      | `/tasks/:taskId/executions`   | Detail worker per divisi                  | `task:read`  |
+| `POST`     | `/tasks/:taskId/cancel`       | Batalkan task                             | `task:write` |
 | **`POST`** | **`/tasks/:taskId/decision`** | **[NEW] Respond ke AwaitingUserDecision** | `task:write` |
-| **`POST`** | **`/tasks/:taskId/feedback`** | **[NEW] Rating 1-5 + opsional comment** | `task:write` |
-| `POST` | `/auth/keys` | Buat API key | `keys:write` |
-| `GET` | `/auth/keys` | List API key | `keys:read` |
-| `DELETE` | `/auth/keys/:keyId` | Cabut API key | `keys:write` |
-| `GET` | `/health/live` | Liveness probe | none |
-| `GET` | `/health/ready` | Readiness probe | none |
+| **`POST`** | **`/tasks/:taskId/feedback`** | **[NEW] Rating 1-5 + opsional comment**   | `task:write` |
+| `POST`     | `/auth/keys`                  | Buat API key                              | `keys:write` |
+| `GET`      | `/auth/keys`                  | List API key                              | `keys:read`  |
+| `DELETE`   | `/auth/keys/:keyId`           | Cabut API key                             | `keys:write` |
+| `GET`      | `/health/live`                | Liveness probe                            | none         |
+| `GET`      | `/health/ready`               | Readiness probe                           | none         |
 
 ### GET /tasks/:taskId/status — dengan Pending Decision [REVISED]
 
@@ -739,7 +752,7 @@ Response standar sama seperti sebelumnya. Tambahan kalau ada pending decision:
 
 ```json
 {
-  "action": "best_effort"    // "best_effort" | "add_budget" | "cancel"
+  "action": "best_effort" // "best_effort" | "add_budget" | "cancel"
 }
 ```
 
@@ -749,7 +762,7 @@ Response `200 OK` jika berhasil. Response `409 Conflict` jika decision sudah exp
 
 ```json
 {
-  "rating": 4,               // 1-5
+  "rating": 4, // 1-5
   "comment": "Output bagus tapi perlu lebih spesifik"
 }
 ```
@@ -784,25 +797,25 @@ data: {"taskId":"...","reason":"qa_max_retry","attempts":3}
 
 ### Harga Provider (referensi Mei 2026)
 
-| Provider | Model | Input /1M (USD) | Output /1M (USD) |
-|---|---|---|---|
-| Anthropic | Claude Haiku 4.5 | $1.00 | $5.00 |
-| Anthropic | Claude Sonnet 4.6 | $3.00 | $15.00 |
-| Anthropic | Claude Opus 4.7 | $5.00 | $25.00 |
-| Google | Gemini 2.5 Flash-Lite | $0.10 | $0.40 |
-| Google | Gemini 2.5 Flash | $0.30 | $2.50 |
-| Google | Gemini 2.5 Pro | $1.25 | $10.00 |
-| OpenAI | GPT-5 | $1.25 | $10.00 |
-| DeepSeek | DeepSeek V3.2 | $0.28 | $0.42 |
-| Mistral | Mistral Medium 3 | $0.40 | $2.00 |
-| Qwen | Qwen 2.5-7B | $0.30 | $0.80 |
-| Kimi | Kimi K2.5 | $0.60 | $2.50 |
+| Provider  | Model                 | Input /1M (USD) | Output /1M (USD) |
+| --------- | --------------------- | --------------- | ---------------- |
+| Anthropic | Claude Haiku 4.5      | $1.00           | $5.00            |
+| Anthropic | Claude Sonnet 4.6     | $3.00           | $15.00           |
+| Anthropic | Claude Opus 4.7       | $5.00           | $25.00           |
+| Google    | Gemini 2.5 Flash-Lite | $0.10           | $0.40            |
+| Google    | Gemini 2.5 Flash      | $0.30           | $2.50            |
+| Google    | Gemini 2.5 Pro        | $1.25           | $10.00           |
+| OpenAI    | GPT-5                 | $1.25           | $10.00           |
+| DeepSeek  | DeepSeek V3.2         | $0.28           | $0.42            |
+| Mistral   | Mistral Medium 3      | $0.40           | $2.00            |
+| Qwen      | Qwen 2.5-7B           | $0.30           | $0.80            |
+| Kimi      | Kimi K2.5             | $0.60           | $2.50            |
 
-*Simpan di `pricing.config.ts`. Alert otomatis kalau cost per request menyimpang lebih dari 20% dari baseline minggu sebelumnya.*
+_Simpan di `pricing.config.ts`. Alert otomatis kalau cost per request menyimpang lebih dari 20% dari baseline minggu sebelumnya._
 
 ### Smart Routing dan Escalation Chain [REVISED]
 
-Complexity score menentukan tier model *awal*. Kalau QA reject, naik ke tier berikutnya (bukan retry dengan model yang sama):
+Complexity score menentukan tier model _awal_. Kalau QA reject, naik ke tier berikutnya (bukan retry dengan model yang sama):
 
 ```
 Attempt 1 (skor 0-2): Gemini Flash / Haiku / DeepSeek V3.2
@@ -822,22 +835,24 @@ Kalau budget tidak cukup untuk attempt berikutnya → AwaitingUserDecision.
 const result = await Budget.findOneAndUpdate(
   {
     tenantId,
-    remaining: { $gte: estimatedCost }  // condition dan update adalah atomic
+    remaining: { $gte: estimatedCost }, // condition dan update adalah atomic
   },
   {
     $inc: { remaining: -estimatedCost },
-    $push: { reservations: { taskId, amount: estimatedCost, reservedAt: new Date() } }
+    $push: {
+      reservations: { taskId, amount: estimatedCost, reservedAt: new Date() },
+    },
   },
-  { new: true }
-)
+  { new: true },
+);
 
-if (!result) throw new InsufficientBudgetError(tenantId, estimatedCost)
+if (!result) throw new InsufficientBudgetError(tenantId, estimatedCost);
 
 // SALAH — read-modify-write di application layer, race condition window
-const budget = await Budget.findOne({ tenantId })
+const budget = await Budget.findOne({ tenantId });
 if (budget.remaining >= estimatedCost) {
-  budget.remaining -= estimatedCost
-  await budget.save()  // ← race condition antara findOne dan save
+  budget.remaining -= estimatedCost;
+  await budget.save(); // ← race condition antara findOne dan save
 }
 ```
 
@@ -848,37 +863,37 @@ Dua worker paralel dari tenant yang sama akan atomic — salah satu berhasil, sa
 ```typescript
 // SYSTEM_FLOOR_TTL — hard constraint, tidak bisa di-override tenant
 const SYSTEM_FLOOR_TTL = {
-  financial:  0,       // tidak pernah di-cache, titik
-  temporal:   60,      // minimum 1 menit
-  personnel:  3600,    // minimum 1 jam
-  inventory:  300,     // minimum 5 menit
-  default:    3600,    // minimum 1 jam
-}
+  financial: 0, // tidak pernah di-cache, titik
+  temporal: 60, // minimum 1 menit
+  personnel: 3600, // minimum 1 jam
+  inventory: 300, // minimum 5 menit
+  default: 3600, // minimum 1 jam
+};
 
 // TENANT_MAX_TTL — tenant bisa adjust ke atas dalam batas ini
 const TENANT_MAX_TTL = {
-  financial:  0,        // tidak ada override untuk financial
-  temporal:   600,      // max 10 menit
-  personnel:  86400,    // max 24 jam
-  inventory:  3600,     // max 1 jam
-  default:    604800,   // max 7 hari
-}
+  financial: 0, // tidak ada override untuk financial
+  temporal: 600, // max 10 menit
+  personnel: 86400, // max 24 jam
+  inventory: 3600, // max 1 jam
+  default: 604800, // max 7 hari
+};
 
 // Klasifikasi prompts — cek ini setiap request, bukan hanya di test
 function classifyPromptCategory(prompt: string): CacheCategory {
   if (/harga|price|kurs|saham|crypto|bitcoin|stock|nilai tukar/i.test(prompt)) {
-    return 'financial'   // TTL = 0, tidak pernah di-cache
+    return "financial"; // TTL = 0, tidak pernah di-cache
   }
   if (/hari ini|sekarang|terbaru|terkini|minggu ini/i.test(prompt)) {
-    return 'temporal'
+    return "temporal";
   }
   if (/CEO|CTO|direktur|presiden|kepala|pemimpin/i.test(prompt)) {
-    return 'personnel'
+    return "personnel";
   }
   if (/tersedia|available|stok|stock|inventory/i.test(prompt)) {
-    return 'inventory'
+    return "inventory";
   }
-  return 'default'
+  return "default";
 }
 ```
 
@@ -954,6 +969,7 @@ Hari 6-7: Docker Compose + satu integration test
 ### TAHAP DEVELOPMENT — Fase 0 sampai 5
 
 #### Fase 0 — Inisiasi Infrastruktur
+
 **Durasi:** Minggu 1 (5 hari)
 
 - [ ] Setup monorepo Turborepo + pnpm workspaces + `turbo.json` pipeline
@@ -970,6 +986,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 1 — Shared Kernel & Contracts
+
 **Durasi:** Minggu 2 (7 hari)
 
 - [ ] **`@bureau/shared-kernel`: `Result<T,E>`, `ok`, `err`, `tryAsync` — file pertama yang ditulis** [NEW]
@@ -985,6 +1002,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 2 — C-Suite + SSC Agents
+
 **Durasi:** Minggu 3–4 (10 hari)
 
 - [ ] CEO Agent + path classifier (rule-based) ⚠️ fast path tidak skip Finance [NEW]
@@ -1005,15 +1023,18 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 3 — Core Execution Agents
+
 **Durasi:** Minggu 5–6 (14 hari)
 
 **Track A: Research + QA**
+
 - [ ] Project Manager Agent — decompose berdasarkan pathType
 - [ ] Research Agent — scatter, 3 worker paralel, reranking
 - [ ] **QA Agent — gate pattern, lightweight untuk fast path, escalation trigger untuk full path** [REVISED]
 - [ ] QA rejection menyertakan failure reason + rekomendasi escalation tier
 
 **Track B: Production + Marketing**
+
 - [ ] Production Agent — pool + semaphore, `attemptReason` tracking [REVISED]
 - [ ] **ChunkWorker — catat `llmInvoked: false` sebelum call, `true` setelah** [NEW]
 - [ ] Marketing Agent — pipeline berurutan
@@ -1025,6 +1046,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 4 — LLM Providers & Smart Routing
+
 **Durasi:** Minggu 7 (7 hari)
 
 - [ ] Claude konkret dulu → Gemini konkret → baru `IModelProvider` abstraction [REVISED]
@@ -1040,6 +1062,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 5 — Tiga Pilar Distribusi
+
 **Durasi:** Minggu 8 (7 hari)
 
 - [ ] **Pilar 1** — `@bureau/mcp-server`: stdio, tools, bin entry
@@ -1055,6 +1078,7 @@ Hari 6-7: Docker Compose + satu integration test
 ### TAHAP TESTING — Fase 6 sampai 8
 
 #### Fase 6 — Unit & Integration Test
+
 **Durasi:** Minggu 9 (7 hari)
 
 - [ ] Unit test `@bureau/*` — Vitest, coverage minimal 80%
@@ -1074,6 +1098,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 7 — E2E & Skenario Komunikasi
+
 **Durasi:** Minggu 10–11 (10 hari)
 
 - [ ] Skenario A — Happy path ketiga pilar end-to-end
@@ -1092,6 +1117,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 8 — Load Test & Performance
+
 **Durasi:** Minggu 12–13 (10 hari)
 
 - [ ] k6 — 50 concurrent, throughput minimal 5 task/detik
@@ -1108,6 +1134,7 @@ Hari 6-7: Docker Compose + satu integration test
 ### TAHAP PRODUCTION — Fase 9 sampai 11
 
 #### Fase 9 — Observability & Monitoring
+
 **Durasi:** Minggu 14 (7 hari)
 
 - [ ] Jaeger tracing — correlationId via BullMQ job metadata [REVISED]
@@ -1122,6 +1149,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 10 — Production Hardening
+
 **Durasi:** Minggu 15 (7 hari)
 
 - [ ] Dockerfile multi-stage → distroless, kurang dari 150MB
@@ -1135,6 +1163,7 @@ Hari 6-7: Docker Compose + satu integration test
 ---
 
 #### Fase 11 — Launch & Iterasi
+
 **Durasi:** Minggu 16 dan seterusnya
 
 - [ ] npm publish
@@ -1212,46 +1241,57 @@ Setiap ADR disimpan di `docs/adr/ADR-XXX-nama-keputusan.md`:
 # ADR-XXX: [Judul Keputusan]
 
 ## Status
+
 Accepted — YYYY-MM-DD
 
 ## Context
+
 [Situasi yang memaksa keputusan ini perlu dibuat.
 Apa masalah yang sedang diselesaikan? Mengapa ini perlu diputuskan sekarang?]
 
 ## Options Considered
 
 ### Option 1: [Nama opsi]
+
 - Pro: ...
 - Con: ...
 - Rejected/Accepted karena: ...
 
 ### Option 2: [Nama opsi]
+
 - Pro: ...
 - Con: ...
 - Rejected/Accepted karena: ...
 
 ## Decision
+
 [Keputusan yang diambil dalam satu kalimat.]
 
 ## Consequences
 
 ### Diterima
+
 - [Trade-off positif yang disadari]
 
 ### Trade-off yang disadari
+
 - [Trade-off negatif yang disadari dan diterima]
 
 ## When to Revisit
+
 Keputusan ini perlu di-review kalau:
+
 - [ ] [Kondisi konkret yang mengindikasikan keputusan ini mungkin salah]
 - [ ] [Metrik atau threshold yang menjadi trigger review]
 
 ## Known Unknowns saat keputusan dibuat
+
 - [Asumsi yang belum terverifikasi]
 - [Data yang tidak ada saat keputusan dibuat]
 ```
 
 **ADR yang harus ditulis di Fase 0-5:**
+
 - `ADR-001-bullmq-only.md` — kenapa RabbitMQ tidak dipakai di MVP
 - `ADR-002-result-pattern.md` — kenapa Result<T,E> bukan exceptions
 - `ADR-003-fast-path-classifier.md` — rule-based vs LLM confidence
@@ -1317,16 +1357,16 @@ Keputusan ini perlu di-review kalau:
 
 ### SLO
 
-| Metrik | Target |
-|---|---|
-| Availability POST /tasks | 99.9% per bulan |
-| p95 latency POST /tasks | kurang dari 500ms (bukan termasuk LLM) |
-| Fast path p95 latency | kurang dari 3 detik end-to-end |
-| p99 end-to-end happy path | kurang dari 60 detik |
-| AwaitingUserDecision resolution rate | lebih dari 70% dalam 2 jam |
-| Data durability | 99.999999999% |
-| RPO | 5 menit |
-| RTO | 30 menit |
+| Metrik                               | Target                                 |
+| ------------------------------------ | -------------------------------------- |
+| Availability POST /tasks             | 99.9% per bulan                        |
+| p95 latency POST /tasks              | kurang dari 500ms (bukan termasuk LLM) |
+| Fast path p95 latency                | kurang dari 3 detik end-to-end         |
+| p99 end-to-end happy path            | kurang dari 60 detik                   |
+| AwaitingUserDecision resolution rate | lebih dari 70% dalam 2 jam             |
+| Data durability                      | 99.999999999%                          |
+| RPO                                  | 5 menit                                |
+| RTO                                  | 30 menit                               |
 
 ### Variabel Environment Wajib [REVISED]
 
@@ -1379,8 +1419,8 @@ BULLMQ_MAX_STALLED_COUNT=2
 - [Vercel AI SDK](https://sdk.vercel.ai)
 - [Twelve-Factor App](https://12factor.net)
 - [Resend Documentation](https://resend.com/docs)
-- Dokumen Riset: *Analisis Komprehensif Arsitektur Organisasi, Orkestrasi Proses Bisnis, dan Digitalisasi Sistem Perkantoran*
+- Dokumen Riset: _Analisis Komprehensif Arsitektur Organisasi, Orkestrasi Proses Bisnis, dan Digitalisasi Sistem Perkantoran_
 
 ---
 
-*Versi 4.0. Setiap perubahan dari v3.0 ditandai [REVISED] atau [NEW]. Keputusan arsitektur besar didokumentasikan di `docs/adr/`. Dokumen ini bersifat hidup — review setiap sprint, update kalau ada yang tidak sesuai dengan temuan di lapangan.*
+_Versi 4.0. Setiap perubahan dari v3.0 ditandai [REVISED] atau [NEW]. Keputusan arsitektur besar didokumentasikan di `docs/adr/`. Dokumen ini bersifat hidup — review setiap sprint, update kalau ada yang tidak sesuai dengan temuan di lapangan._

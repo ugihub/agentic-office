@@ -11,8 +11,8 @@ apiServer:
   enabled: true
   image:
     repository: ghcr.io/bureau-id/bureau-api-server
-    tag: ""  # defaults to global.imageTag
-    pullPolicy: ""  # defaults to global.imagePullPolicy
+    tag: "" # defaults to global.imageTag
+    pullPolicy: "" # defaults to global.imagePullPolicy
 
   replicaCount: 2
 
@@ -139,7 +139,7 @@ workers:
     targetMemoryUtilizationPercentage: 75
     behavior:
       scaleDown:
-        stabilizationWindowSeconds: 600  # Wait 10min before scaling down workers
+        stabilizationWindowSeconds: 600 # Wait 10min before scaling down workers
         policies:
           - type: Pods
             value: 1
@@ -155,7 +155,7 @@ workers:
     enabled: true
     minAvailable: 1
 
-  terminationGracePeriodSeconds: 120  # Workers drain BullMQ jobs before exit
+  terminationGracePeriodSeconds: 120 # Workers drain BullMQ jobs before exit
 
 # ─── Secrets (injected via Doppler / External Secrets Operator) ──────────────
 secrets:
@@ -176,7 +176,7 @@ secrets:
 # ─── Pod security ─────────────────────────────────────────────────────────────
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 65532    # distroless nonroot uid
+  runAsUser: 65532 # distroless nonroot uid
   runAsGroup: 65532
   fsGroup: 65532
   seccompProfile:

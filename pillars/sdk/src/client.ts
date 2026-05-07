@@ -20,15 +20,15 @@ import type {
   CreateApiKeyResult,
   DecisionAction,
   BureauSSEEvent,
-} from './types.js'
-import { streamSSE } from './streaming.js'
+} from "./types.js";
+import { streamSSE } from "./streaming.js";
 
-const DEFAULT_BASE_URL = 'https://api.bureau.id'
-const API_PREFIX = '/api/v1'
+const DEFAULT_BASE_URL = "https://api.bureau.id";
+const API_PREFIX = "/api/v1";
 
-type ListTasksResponse = { tasks: TaskEnvelope[] }
-type ListApiKeysResponse = { keys: ApiKey[] }
-type CreateApiKeyApiResponse = CreateApiKeyResult & { prefix?: string }
+type ListTasksResponse = { tasks: TaskEnvelope[] };
+type ListApiKeysResponse = { keys: ApiKey[] };
+type CreateApiKeyApiResponse = CreateApiKeyResult & { prefix?: string };
 
 export class BureauError extends Error {
   constructor(
@@ -36,50 +36,54 @@ export class BureauError extends Error {
     public readonly status: number,
     public readonly body: string,
   ) {
-    super(message)
-    this.name = 'BureauError'
+    super(message);
+    this.name = "BureauError";
   }
 }
 
 export class BureauClient {
-  private readonly baseUrl: string
-  private readonly headers: Record<string, string>
-  private readonly timeout: number
+  private readonly baseUrl: string;
+  private readonly headers: Record<string, string>;
+  private readonly timeout: number;
 
   constructor(options: BureauClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '')
-    this.timeout = options.timeout ?? 30_000
+    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+    this.timeout = options.timeout ?? 30_000;
 
-    this.headers = { 'Content-Type': 'application/json' }
-    if (options.apiKey) this.headers['X-Api-Key'] = options.apiKey
-    if (options.jwt) this.headers['Authorization'] = `Bearer ${options.jwt}`
+    this.headers = { "Content-Type": "application/json" };
+    if (options.apiKey) this.headers["X-Api-Key"] = options.apiKey;
+    if (options.jwt) this.headers["Authorization"] = `Bearer ${options.jwt}`;
   }
 
   // ─── Core fetch ──────────────────────────────────────────────────────────────
 
   private async fetch<T>(path: string, init?: RequestInit): Promise<T> {
-    const url = `${this.baseUrl}${API_PREFIX}${path}`
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+    const url = `${this.baseUrl}${API_PREFIX}${path}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
       const res = await fetch(url, {
         ...init,
         headers: {
           ...this.headers,
-          ...(init?.headers as Record<string, string> | undefined ?? {}),
+          ...((init?.headers as Record<string, string> | undefined) ?? {}),
         },
         signal: controller.signal,
-      })
+      });
 
-      const text = await res.text()
+      const text = await res.text();
       if (!res.ok) {
-        throw new BureauError(`Bureau API error ${res.status}`, res.status, text)
+        throw new BureauError(
+          `Bureau API error ${res.status}`,
+          res.status,
+          text,
+        );
       }
 
-      return JSON.parse(text) as T
+      return JSON.parse(text) as T;
     } finally {
-      clearTimeout(timeoutId)
+      clearTimeout(timeoutId);
     }
   }
 
@@ -90,47 +94,52 @@ export class BureauClient {
    * Returns the task envelope immediately — task executes asynchronously.
    */
   async submitTask(options: SubmitTaskOptions): Promise<TaskEnvelope> {
-    const extraHeaders: Record<string, string> = {}
+    const extraHeaders: Record<string, string> = {};
     if (options.idempotencyKey) {
-      extraHeaders['Idempotency-Key'] = options.idempotencyKey
+      extraHeaders["Idempotency-Key"] = options.idempotencyKey;
     }
 
-    return this.fetch<TaskEnvelope>('/tasks', {
-      method: 'POST',
+    return this.fetch<TaskEnvelope>("/tasks", {
+      method: "POST",
       body: JSON.stringify({
         prompt: options.prompt,
         constraints: options.constraints ?? {},
-        outputFormat: options.outputFormat ?? 'markdown',
+        outputFormat: options.outputFormat ?? "markdown",
         metadata: options.metadata ?? {},
       }),
       headers: extraHeaders,
-    })
+    });
   }
 
   /**
    * List tasks (most recent first).
    */
-  async listTasks(opts?: { limit?: number; stage?: string }): Promise<TaskEnvelope[]> {
-    const params = new URLSearchParams()
-    if (opts?.limit) params.set('limit', String(opts.limit))
-    if (opts?.stage) params.set('stage', opts.stage)
-    const qs = params.size > 0 ? `?${params.toString()}` : ''
-    const result = await this.fetch<TaskEnvelope[] | ListTasksResponse>(`/tasks${qs}`)
-    return Array.isArray(result) ? result : result.tasks
+  async listTasks(opts?: {
+    limit?: number;
+    stage?: string;
+  }): Promise<TaskEnvelope[]> {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.stage) params.set("stage", opts.stage);
+    const qs = params.size > 0 ? `?${params.toString()}` : "";
+    const result = await this.fetch<TaskEnvelope[] | ListTasksResponse>(
+      `/tasks${qs}`,
+    );
+    return Array.isArray(result) ? result : result.tasks;
   }
 
   /**
    * Get full task envelope.
    */
   async getTask(taskId: string): Promise<TaskEnvelope> {
-    return this.fetch<TaskEnvelope>(`/tasks/${taskId}`)
+    return this.fetch<TaskEnvelope>(`/tasks/${taskId}`);
   }
 
   /**
    * Get task status (lighter than full envelope).
    */
   async getTaskStatus(taskId: string): Promise<TaskStatus> {
-    return this.fetch<TaskStatus>(`/tasks/${taskId}/status`)
+    return this.fetch<TaskStatus>(`/tasks/${taskId}/status`);
   }
 
   /**
@@ -138,8 +147,8 @@ export class BureauClient {
    */
   async cancelTask(taskId: string): Promise<{ cancelled: boolean }> {
     return this.fetch<{ cancelled: boolean }>(`/tasks/${taskId}/cancel`, {
-      method: 'POST',
-    })
+      method: "POST",
+    });
   }
 
   /**
@@ -150,9 +159,9 @@ export class BureauClient {
     action: DecisionAction,
   ): Promise<{ accepted: boolean }> {
     return this.fetch<{ accepted: boolean }>(`/tasks/${taskId}/decision`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ action }),
-    })
+    });
   }
 
   /**
@@ -164,9 +173,9 @@ export class BureauClient {
     comment?: string,
   ): Promise<{ recorded: boolean }> {
     return this.fetch<{ recorded: boolean }>(`/tasks/${taskId}/feedback`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ rating, comment }),
-    })
+    });
   }
 
   /**
@@ -179,14 +188,17 @@ export class BureauClient {
    *   if (event.event === 'task.completed') console.log(event.output)
    * }
    */
-  streamTask(taskId: string, signal?: AbortSignal): AsyncGenerator<BureauSSEEvent> {
-    const url = `${this.baseUrl}${API_PREFIX}/tasks/${taskId}/stream`
+  streamTask(
+    taskId: string,
+    signal?: AbortSignal,
+  ): AsyncGenerator<BureauSSEEvent> {
+    const url = `${this.baseUrl}${API_PREFIX}/tasks/${taskId}/stream`;
     // Clone headers without Content-Type (SSE is GET)
-    const sseHeaders: Record<string, string> = {}
+    const sseHeaders: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.headers)) {
-      if (k !== 'Content-Type') sseHeaders[k] = v
+      if (k !== "Content-Type") sseHeaders[k] = v;
     }
-    return streamSSE(url, sseHeaders, signal)
+    return streamSSE(url, sseHeaders, signal);
   }
 
   /**
@@ -198,34 +210,46 @@ export class BureauClient {
   async waitForTask(
     taskId: string,
     opts?: {
-      intervalMs?: number
-      timeoutMs?: number
-      onStatus?: (status: TaskStatus) => void
+      intervalMs?: number;
+      timeoutMs?: number;
+      onStatus?: (status: TaskStatus) => void;
     },
   ): Promise<TaskStatus> {
-    const intervalMs = opts?.intervalMs ?? 3_000
-    const timeoutMs = opts?.timeoutMs ?? 300_000 // 5 min default
-    const deadline = Date.now() + timeoutMs
-    const terminal = new Set(['Completed', 'Failed', 'Cancelled'])
+    const intervalMs = opts?.intervalMs ?? 3_000;
+    const timeoutMs = opts?.timeoutMs ?? 300_000; // 5 min default
+    const deadline = Date.now() + timeoutMs;
+    const terminal = new Set(["Completed", "Failed", "Cancelled"]);
 
     while (Date.now() < deadline) {
-      const status = await this.getTaskStatus(taskId)
-      opts?.onStatus?.(status)
+      const status = await this.getTaskStatus(taskId);
+      opts?.onStatus?.(status);
 
       if (terminal.has(status.currentStage)) {
-        if (status.currentStage === 'Failed') {
-          throw new BureauError(`Task ${taskId} failed`, 0, status.currentStage)
+        if (status.currentStage === "Failed") {
+          throw new BureauError(
+            `Task ${taskId} failed`,
+            0,
+            status.currentStage,
+          );
         }
-        if (status.currentStage === 'Cancelled') {
-          throw new BureauError(`Task ${taskId} was cancelled`, 0, status.currentStage)
+        if (status.currentStage === "Cancelled") {
+          throw new BureauError(
+            `Task ${taskId} was cancelled`,
+            0,
+            status.currentStage,
+          );
         }
-        return status
+        return status;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
-    throw new BureauError(`Task ${taskId} timed out after ${timeoutMs}ms`, 0, 'timeout')
+    throw new BureauError(
+      `Task ${taskId} timed out after ${timeoutMs}ms`,
+      0,
+      "timeout",
+    );
   }
 
   // ─── API Keys ─────────────────────────────────────────────────────────────────
@@ -235,41 +259,46 @@ export class BureauClient {
    * The plaintext key is returned ONCE — store it securely.
    */
   async createApiKey(opts: {
-    name: string
-    permissions?: string[]
-    expiresInDays?: number
+    name: string;
+    permissions?: string[];
+    expiresInDays?: number;
   }): Promise<CreateApiKeyResult> {
-    const result = await this.fetch<CreateApiKeyApiResponse>('/auth/keys', {
-      method: 'POST',
+    const result = await this.fetch<CreateApiKeyApiResponse>("/auth/keys", {
+      method: "POST",
       body: JSON.stringify({
         name: opts.name,
-        permissions: opts.permissions ?? ['task:read', 'task:write'],
+        permissions: opts.permissions ?? ["task:read", "task:write"],
         expiresInDays: opts.expiresInDays,
       }),
-    })
+    });
 
     return {
       ...result,
-      keyPrefix: result.keyPrefix ?? result.prefix ?? '',
-    }
+      keyPrefix: result.keyPrefix ?? result.prefix ?? "",
+    };
   }
 
   /**
    * List API keys (without plaintext).
    */
   async listApiKeys(): Promise<ApiKey[]> {
-    const result = await this.fetch<ApiKey[] | ListApiKeysResponse>('/auth/keys')
-    return Array.isArray(result) ? result : result.keys
+    const result = await this.fetch<ApiKey[] | ListApiKeysResponse>(
+      "/auth/keys",
+    );
+    return Array.isArray(result) ? result : result.keys;
   }
 
   /**
    * Revoke an API key.
    */
   async revokeApiKey(keyId: string): Promise<{ revoked: boolean }> {
-    const result = await this.fetch<{ revoked?: boolean; status?: string }>(`/auth/keys/${keyId}`, {
-      method: 'DELETE',
-    })
-    return { revoked: result.revoked ?? result.status === 'revoked' }
+    const result = await this.fetch<{ revoked?: boolean; status?: string }>(
+      `/auth/keys/${keyId}`,
+      {
+        method: "DELETE",
+      },
+    );
+    return { revoked: result.revoked ?? result.status === "revoked" };
   }
 
   /**
@@ -280,11 +309,14 @@ export class BureauClient {
     provider: string,
     plaintext: string,
   ): Promise<{ stored: boolean }> {
-    const result = await this.fetch<{ stored?: boolean; isActive?: boolean }>('/auth/provider-keys', {
-      method: 'POST',
-      body: JSON.stringify({ provider, plaintext }),
-    })
-    return { stored: result.stored ?? result.isActive ?? true }
+    const result = await this.fetch<{ stored?: boolean; isActive?: boolean }>(
+      "/auth/provider-keys",
+      {
+        method: "POST",
+        body: JSON.stringify({ provider, plaintext }),
+      },
+    );
+    return { stored: result.stored ?? result.isActive ?? true };
   }
 
   /**
@@ -292,13 +324,13 @@ export class BureauClient {
    */
   async removeProviderKey(provider: string): Promise<{ removed: boolean }> {
     return this.fetch<{ removed: boolean }>(`/auth/provider-keys/${provider}`, {
-      method: 'DELETE',
-    })
+      method: "DELETE",
+    });
   }
 
   // ─── Health ───────────────────────────────────────────────────────────────────
 
-  async healthCheck(): Promise<{ status: 'ready' | 'degraded' }> {
-    return this.fetch<{ status: 'ready' | 'degraded' }>('/health/ready')
+  async healthCheck(): Promise<{ status: "ready" | "degraded" }> {
+    return this.fetch<{ status: "ready" | "degraded" }>("/health/ready");
   }
 }

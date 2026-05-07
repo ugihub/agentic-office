@@ -14,12 +14,9 @@ export {
   pingMongo,
   type MongoContextOptions,
   type MongoConnectionState,
-} from './context.js'
+} from "./context.js";
 
-export {
-  BaseRepository,
-  type FindOptions,
-} from './repository.js'
+export { BaseRepository, type FindOptions } from "./repository.js";
 
 export {
   OutboxModel,
@@ -29,4 +26,4 @@ export {
   markOutboxFailed,
   type OutboxDocument,
   type OutboxEntry,
-} from './outbox.js'
+} from "./outbox.js";

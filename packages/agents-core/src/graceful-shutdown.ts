@@ -16,26 +16,29 @@
 
 export interface ShutdownOptions {
   /** Max ms to wait for in-flight work to complete (default: 30000) */
-  drainTimeoutMs?: number | undefined
+  drainTimeoutMs?: number | undefined;
   /** Custom log function (default: console.error) */
-  log?: ((msg: string, meta?: Record<string, unknown>) => void) | undefined
+  log?: ((msg: string, meta?: Record<string, unknown>) => void) | undefined;
 }
 
 export interface CleanupHandler {
-  name: string
-  handler: () => Promise<void>
+  name: string;
+  handler: () => Promise<void>;
 }
 
-const _cleanupHandlers: CleanupHandler[] = []
-let _isShuttingDown = false
-let _rootAbortController: AbortController | null = null
+const _cleanupHandlers: CleanupHandler[] = [];
+let _isShuttingDown = false;
+let _rootAbortController: AbortController | null = null;
 
 /**
  * Register a cleanup handler to run on shutdown.
  * Handlers run in registration order.
  */
-export function registerCleanupHandler(name: string, handler: () => Promise<void>): void {
-  _cleanupHandlers.push({ name, handler })
+export function registerCleanupHandler(
+  name: string,
+  handler: () => Promise<void>,
+): void {
+  _cleanupHandlers.push({ name, handler });
 }
 
 /**
@@ -44,9 +47,9 @@ export function registerCleanupHandler(name: string, handler: () => Promise<void
  */
 export function getRootAbortSignal(): AbortSignal {
   if (_rootAbortController === null) {
-    _rootAbortController = new AbortController()
+    _rootAbortController = new AbortController();
   }
-  return _rootAbortController.signal
+  return _rootAbortController.signal;
 }
 
 /**
@@ -65,34 +68,36 @@ export function getRootAbortSignal(): AbortSignal {
  * ```
  */
 export function installGracefulShutdown(options: ShutdownOptions = {}): void {
-  const { drainTimeoutMs = 30_000, log = console.error } = options
+  const { drainTimeoutMs = 30_000, log = console.error } = options;
 
   const shutdown = async (signal: string): Promise<void> => {
     if (_isShuttingDown) {
-      log(`[shutdown] Already shutting down, ignoring ${signal}`)
-      return
+      log(`[shutdown] Already shutting down, ignoring ${signal}`);
+      return;
     }
 
-    _isShuttingDown = true
+    _isShuttingDown = true;
     log(`[shutdown] ${signal} received — starting graceful shutdown`, {
       drainTimeoutMs,
       handlerCount: _cleanupHandlers.length,
-    })
+    });
 
     // Abort all in-flight agent work
     if (_rootAbortController === null) {
-      _rootAbortController = new AbortController()
+      _rootAbortController = new AbortController();
     }
-    _rootAbortController.abort()
-    log('[shutdown] Root AbortController aborted — signalling all agents')
+    _rootAbortController.abort();
+    log("[shutdown] Root AbortController aborted — signalling all agents");
 
     // Allow drain window
-    const drainStart = Date.now()
-    await new Promise<void>((resolve) => setTimeout(resolve, Math.min(drainTimeoutMs, 5000)))
+    const drainStart = Date.now();
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, Math.min(drainTimeoutMs, 5000)),
+    );
 
-    log('[shutdown] Running cleanup handlers', {
+    log("[shutdown] Running cleanup handlers", {
       elapsed: Date.now() - drainStart,
-    })
+    });
 
     // Run cleanup handlers sequentially (order matters: workers → redis → mongo)
     for (const { name, handler } of _cleanupHandlers) {
@@ -100,45 +105,45 @@ export function installGracefulShutdown(options: ShutdownOptions = {}): void {
         await Promise.race([
           handler(),
           new Promise<void>((_, reject) =>
-            setTimeout(() => reject(new Error('cleanup timeout')), 10_000),
+            setTimeout(() => reject(new Error("cleanup timeout")), 10_000),
           ),
-        ])
-        log(`[shutdown] Cleanup completed: ${name}`)
+        ]);
+        log(`[shutdown] Cleanup completed: ${name}`);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        log(`[shutdown] Cleanup failed (non-fatal): ${name}`, { err: msg })
+        const msg = e instanceof Error ? e.message : String(e);
+        log(`[shutdown] Cleanup failed (non-fatal): ${name}`, { err: msg });
       }
     }
 
-    log('[shutdown] All cleanup done — exiting', {
+    log("[shutdown] All cleanup done — exiting", {
       totalMs: Date.now() - drainStart,
-    })
+    });
 
-    process.exit(0)
-  }
+    process.exit(0);
+  };
 
-  process.on('SIGTERM', () => void shutdown('SIGTERM'))
-  process.on('SIGINT', () => void shutdown('SIGINT'))
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 
   // Unhandled rejection guard — log but don't crash
-  process.on('unhandledRejection', (reason: unknown) => {
-    log('[process] Unhandled promise rejection', {
+  process.on("unhandledRejection", (reason: unknown) => {
+    log("[process] Unhandled promise rejection", {
       reason: reason instanceof Error ? reason.message : String(reason),
-    })
-  })
+    });
+  });
 
-  process.on('uncaughtException', (error: Error) => {
-    log('[process] Uncaught exception — initiating shutdown', {
+  process.on("uncaughtException", (error: Error) => {
+    log("[process] Uncaught exception — initiating shutdown", {
       err: error.message,
       stack: error.stack,
-    })
-    void shutdown('uncaughtException')
-  })
+    });
+    void shutdown("uncaughtException");
+  });
 }
 
 /** Check if shutdown is in progress */
 export function isShuttingDown(): boolean {
-  return _isShuttingDown
+  return _isShuttingDown;
 }
 
 /**
@@ -148,25 +153,29 @@ export function isShuttingDown(): boolean {
 export function createTaskAbortController(
   taskAbortSignal?: AbortSignal | undefined,
 ): AbortController {
-  const controller = new AbortController()
-  const rootSignal = getRootAbortSignal()
+  const controller = new AbortController();
+  const rootSignal = getRootAbortSignal();
 
   // Abort child if root shuts down
   if (rootSignal.aborted) {
-    controller.abort()
-    return controller
+    controller.abort();
+    return controller;
   }
 
-  rootSignal.addEventListener('abort', () => controller.abort(), { once: true })
+  rootSignal.addEventListener("abort", () => controller.abort(), {
+    once: true,
+  });
 
   // Also abort child if task-level cancel is requested
   if (taskAbortSignal) {
     if (taskAbortSignal.aborted) {
-      controller.abort()
+      controller.abort();
     } else {
-      taskAbortSignal.addEventListener('abort', () => controller.abort(), { once: true })
+      taskAbortSignal.addEventListener("abort", () => controller.abort(), {
+        once: true,
+      });
     }
   }
 
-  return controller
+  return controller;
 }

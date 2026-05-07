@@ -1,0 +1,11 @@
+# Helm templates use Go template syntax {{ }} which is not valid YAML
+deploy/helm/bureau/templates/
+
+# Lock files
+pnpm-lock.yaml
+
+# Generated build output
+**/dist/
+**/node_modules/
+**/.turbo/
+**/coverage/

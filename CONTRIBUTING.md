@@ -82,14 +82,14 @@ CI=true bash tests/security/security-scan.sh
 
 Read the ADRs before submitting significant changes:
 
-| ADR | Decision |
-|---|---|
-| [ADR-001](docs/adr/ADR-001-bullmq-only.md) | BullMQ-only (no RabbitMQ) |
-| [ADR-002](docs/adr/ADR-002-result-pattern.md) | Result\<T,E\> — no throw in business logic |
-| [ADR-003](docs/adr/ADR-003-fast-path-classifier.md) | Rule-based path classifier (not LLM) |
-| [ADR-004](docs/adr/ADR-004-escalation-chain.md) | Escalation chain + AwaitingUserDecision |
-| [ADR-005](docs/adr/ADR-005-cache-ttl-categories.md) | Category-based TTL cache |
-| [ADR-006](docs/adr/ADR-006-schema-strict-no-reserved.md) | Strict schema, no reserved fields |
+| ADR                                                      | Decision                                   |
+| -------------------------------------------------------- | ------------------------------------------ |
+| [ADR-001](docs/adr/ADR-001-bullmq-only.md)               | BullMQ-only (no RabbitMQ)                  |
+| [ADR-002](docs/adr/ADR-002-result-pattern.md)            | Result\<T,E\> — no throw in business logic |
+| [ADR-003](docs/adr/ADR-003-fast-path-classifier.md)      | Rule-based path classifier (not LLM)       |
+| [ADR-004](docs/adr/ADR-004-escalation-chain.md)          | Escalation chain + AwaitingUserDecision    |
+| [ADR-005](docs/adr/ADR-005-cache-ttl-categories.md)      | Category-based TTL cache                   |
+| [ADR-006](docs/adr/ADR-006-schema-strict-no-reserved.md) | Strict schema, no reserved fields          |
 
 ## Critical Rules
 
@@ -120,6 +120,7 @@ These rules are non-negotiable. PRs violating them will not be merged:
 Email: security@bureau.id
 
 Include:
+
 - Description of the vulnerability
 - Steps to reproduce
 - Potential impact

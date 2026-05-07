@@ -8,24 +8,24 @@
  * Skipping ALL compliance in fast path = sending unvalidated output to user.
  * So fast path always has SchemaValidator.
  */
-import { type Result, ok, err } from '@bureau/shared-kernel'
-import { ComplianceViolationError } from '@bureau/shared-kernel'
-import type { ExecutionPath } from '@bureau/contracts'
+import { type Result, ok, err } from "@bureau/shared-kernel";
+import { ComplianceViolationError } from "@bureau/shared-kernel";
+import type { ExecutionPath } from "@bureau/contracts";
 
 export interface ComplianceRequest {
-  prompt: string
-  executionPath: ExecutionPath
-  outputFormat: string
+  prompt: string;
+  executionPath: ExecutionPath;
+  outputFormat: string;
 }
 
 export interface ComplianceResult {
-  approved: boolean
+  approved: boolean;
   violations: Array<{
-    type: 'toxicity' | 'factuality' | 'schema' | 'prompt_injection'
-    severity: 'low' | 'medium' | 'high'
-    details: string
-  }>
-  validatorsRun: string[]
+    type: "toxicity" | "factuality" | "schema" | "prompt_injection";
+    severity: "low" | "medium" | "high";
+    details: string;
+  }>;
+  validatorsRun: string[];
 }
 
 /** Detect prompt injection attempts */
@@ -43,8 +43,8 @@ function detectPromptInjection(prompt: string): boolean {
     /pretend you are/i,
     /act as if you/i,
     /roleplay as/i,
-  ]
-  return injectionPatterns.some((p) => p.test(prompt))
+  ];
+  return injectionPatterns.some((p) => p.test(prompt));
 }
 
 /** Check for high-toxicity content patterns */
@@ -54,17 +54,17 @@ function detectToxicity(prompt: string): boolean {
     /\bhate\s+speech\b/i,
     /\bkill\s+(all|every)\b/i,
     /\bexterminate\b/i,
-  ]
-  return toxicPatterns.some((p) => p.test(prompt))
+  ];
+  return toxicPatterns.some((p) => p.test(prompt));
 }
 
 /** Validate that prompt matches expected schema/format */
 function validateSchema(prompt: string, outputFormat: string): boolean {
   // Ensure prompt is non-empty and within size limits
-  if (prompt.length === 0 || prompt.length > 50000) return false
+  if (prompt.length === 0 || prompt.length > 50000) return false;
   // Ensure output format is valid
-  const validFormats = ['markdown', 'json', 'text', 'html']
-  return validFormats.includes(outputFormat)
+  const validFormats = ["markdown", "json", "text", "html"];
+  return validFormats.includes(outputFormat);
 }
 
 /**
@@ -75,54 +75,57 @@ function validateSchema(prompt: string, outputFormat: string): boolean {
 export async function runComplianceValidation(
   request: ComplianceRequest,
 ): Promise<Result<ComplianceResult, ComplianceViolationError>> {
-  const violations: ComplianceResult['violations'] = []
-  const validatorsRun: string[] = []
+  const violations: ComplianceResult["violations"] = [];
+  const validatorsRun: string[] = [];
 
   // Schema validator — ALWAYS runs (even fast path)
-  validatorsRun.push('SchemaValidator')
+  validatorsRun.push("SchemaValidator");
   if (!validateSchema(request.prompt, request.outputFormat)) {
     violations.push({
-      type: 'schema',
-      severity: 'high',
-      details: 'Prompt fails schema validation (empty, too long, or invalid format)',
-    })
+      type: "schema",
+      severity: "high",
+      details:
+        "Prompt fails schema validation (empty, too long, or invalid format)",
+    });
   }
 
-  validatorsRun.push('PromptInjectionValidator')
+  validatorsRun.push("PromptInjectionValidator");
   if (detectPromptInjection(request.prompt)) {
     violations.push({
-      type: 'prompt_injection',
-      severity: 'high',
-      details: 'Prompt injection attempt detected',
-    })
+      type: "prompt_injection",
+      severity: "high",
+      details: "Prompt injection attempt detected",
+    });
   }
 
-  if (request.executionPath !== 'fast') {
-    validatorsRun.push('FactualityValidator')
+  if (request.executionPath !== "fast") {
+    validatorsRun.push("FactualityValidator");
 
-    validatorsRun.push('ToxicityValidator')
+    validatorsRun.push("ToxicityValidator");
     if (detectToxicity(request.prompt)) {
       violations.push({
-        type: 'toxicity',
-        severity: 'high',
-        details: 'Prompt contains high-toxicity content',
-      })
+        type: "toxicity",
+        severity: "high",
+        details: "Prompt contains high-toxicity content",
+      });
     }
   }
 
-  const highSeverityViolations = violations.filter((v) => v.severity === 'high')
+  const highSeverityViolations = violations.filter(
+    (v) => v.severity === "high",
+  );
   if (highSeverityViolations.length > 0) {
-    const firstViolation = highSeverityViolations[0]!
+    const firstViolation = highSeverityViolations[0]!;
     return err(
       new ComplianceViolationError(firstViolation.type, firstViolation.details),
-    )
+    );
   }
 
   return ok({
     approved: true,
     violations,
     validatorsRun,
-  })
+  });
 }
 
-export const runComplianceCheck = runComplianceValidation
+export const runComplianceCheck = runComplianceValidation;

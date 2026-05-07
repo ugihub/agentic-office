@@ -10,33 +10,38 @@
  * This is a FINANCIAL RECORD. Do not store prompt text here.
  * Lookup via taskId → task_envelopes if prompt text needed for investigation.
  */
-import { type Result, tryAsync, newId, EntityPrefix } from '@bureau/shared-kernel'
-import { createLogger } from '@bureau/telemetry'
-import { CostEventModel } from '@bureau/models'
-import type { Division } from '@bureau/contracts'
+import {
+  type Result,
+  tryAsync,
+  newId,
+  EntityPrefix,
+} from "@bureau/shared-kernel";
+import { createLogger } from "@bureau/telemetry";
+import { CostEventModel } from "@bureau/models";
+import type { Division } from "@bureau/contracts";
 
 export interface LlmInvocationRecord {
-  tenantId: string
-  userId: string | null        // null if GDPR anonymized before record creation
-  taskId: string
-  division: Division
-  agentId: string
+  tenantId: string;
+  userId: string | null; // null if GDPR anonymized before record creation
+  taskId: string;
+  division: Division;
+  agentId: string;
 
-  provider: string
-  model: string
-  tokensIn: number
-  tokensOut: number
-  cachedTokens: number
-  costUsd: string             // decimal string e.g. "0.0089"
+  provider: string;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  cachedTokens: number;
+  costUsd: string; // decimal string e.g. "0.0089"
 
-  retryAttempt: number        // 0 = first attempt
-  isEscalated: boolean
-  escalationTier: 'tier1' | 'tier2' | 'tier3' | null
+  retryAttempt: number; // 0 = first attempt
+  isEscalated: boolean;
+  escalationTier: "tier1" | "tier2" | "tier3" | null;
 
-  durationMs: number
+  durationMs: number;
 }
 
-const log = createLogger({ division: 'FinanceSSC' })
+const log = createLogger({ division: "FinanceSSC" });
 
 /**
  * Record a single LLM invocation.
@@ -48,7 +53,7 @@ const log = createLogger({ division: 'FinanceSSC' })
 export async function recordLlmInvocation(
   record: LlmInvocationRecord,
 ): Promise<Result<string, Error>> {
-  const eventId = newId(EntityPrefix.COST_EVENT)
+  const eventId = newId(EntityPrefix.COST_EVENT);
 
   const result = await tryAsync(async () => {
     await CostEventModel.create({
@@ -70,10 +75,10 @@ export async function recordLlmInvocation(
       durationMs: record.durationMs,
       timestamp: new Date(),
       anonymizedAt: null,
-      schemaVersion: 'v1',
-    })
-    return eventId
-  })
+      schemaVersion: "v1",
+    });
+    return eventId;
+  });
 
   if (!result.ok) {
     // Log but don't fail the calling operation
@@ -84,20 +89,20 @@ export async function recordLlmInvocation(
         model: record.model,
         costUsd: record.costUsd,
       },
-      'Failed to record LLM cost event — cost data may be incomplete',
-    )
+      "Failed to record LLM cost event — cost data may be incomplete",
+    );
   }
 
-  return result
+  return result;
 }
 
 export interface CostSummary {
-  totalCostUsd: string
-  totalTokensIn: number
-  totalTokensOut: number
-  cachedTokens: number
-  invocationCount: number
-  escalatedCount: number
+  totalCostUsd: string;
+  totalTokensIn: number;
+  totalTokensOut: number;
+  cachedTokens: number;
+  invocationCount: number;
+  escalatedCount: number;
 }
 
 /**
@@ -108,30 +113,30 @@ export async function getTaskCostSummary(
   taskId: string,
 ): Promise<Result<CostSummary, Error>> {
   return tryAsync(async () => {
-    const events = await CostEventModel.find({ taskId }).lean().exec()
+    const events = await CostEventModel.find({ taskId }).lean().exec();
 
     const summary: CostSummary = {
-      totalCostUsd: '0',
+      totalCostUsd: "0",
       totalTokensIn: 0,
       totalTokensOut: 0,
       cachedTokens: 0,
       invocationCount: events.length,
       escalatedCount: 0,
-    }
+    };
 
-    let totalCost = 0
+    let totalCost = 0;
 
     for (const event of events) {
-      totalCost += parseFloat(event.costUsd.toString())
-      summary.totalTokensIn += event.tokensIn
-      summary.totalTokensOut += event.tokensOut
-      summary.cachedTokens += event.cachedTokens
-      if (event.isEscalated) summary.escalatedCount++
+      totalCost += parseFloat(event.costUsd.toString());
+      summary.totalTokensIn += event.tokensIn;
+      summary.totalTokensOut += event.tokensOut;
+      summary.cachedTokens += event.cachedTokens;
+      if (event.isEscalated) summary.escalatedCount++;
     }
 
-    summary.totalCostUsd = totalCost.toFixed(8)
-    return summary
-  })
+    summary.totalCostUsd = totalCost.toFixed(8);
+    return summary;
+  });
 }
 
 /**
@@ -146,7 +151,7 @@ export async function anonymizeCostEvents(
     const result = await CostEventModel.updateMany(
       { userId },
       { $set: { userId: null, anonymizedAt: new Date() } },
-    ).exec()
-    return result.modifiedCount
-  })
+    ).exec();
+    return result.modifiedCount;
+  });
 }

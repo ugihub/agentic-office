@@ -3,11 +3,11 @@ name: Publish to npm
 on:
   push:
     tags:
-      - 'v*.*.*'   # Trigger on semantic version tags: v1.0.0, v1.2.3-beta.1
+      - "v*.*.*" # Trigger on semantic version tags: v1.0.0, v1.2.3-beta.1
 
 permissions:
   contents: read
-  packages: write  # For GitHub Packages / GHCR
+  packages: write # For GitHub Packages / GHCR
 
 jobs:
   validate:
@@ -19,13 +19,13 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '9'
+          version: "9"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -48,21 +48,21 @@ jobs:
     name: Publish to npm registry
     needs: validate
     runs-on: ubuntu-latest
-    environment: npm-publish  # Requires manual approval in GitHub Environments
+    environment: npm-publish # Requires manual approval in GitHub Environments
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '9'
+          version: "9"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

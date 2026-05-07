@@ -16,50 +16,56 @@
  * @see https://upstash.com/docs/vector/overall/getstarted
  */
 
-import { createLogger, recordCacheHit } from '@bureau/telemetry'
-import { classifyCacheCategory, SYSTEM_FLOOR_TTL } from './category-cache.js'
+import { createLogger, recordCacheHit } from "@bureau/telemetry";
+import { classifyCacheCategory, SYSTEM_FLOOR_TTL } from "./category-cache.js";
 
-const log = createLogger({ division: 'Production' })
+const log = createLogger({ division: "Production" });
 
 // ─── Similarity threshold ─────────────────────────────────────────────────────
 
 /** Hard minimum similarity — do not serve cache below this even if Upstash returns it */
-const SIMILARITY_FLOOR = 0.90
+const SIMILARITY_FLOOR = 0.9;
 
 /** Default target similarity — configurable, must be >= SIMILARITY_FLOOR */
-const DEFAULT_SIMILARITY_THRESHOLD = 0.95
+const DEFAULT_SIMILARITY_THRESHOLD = 0.95;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface SemanticCacheEntry {
-  text: string
-  modelUsed: string
-  tokensIn: number
-  tokensOut: number
-  costUsd: number
-  cachedAt: number
+  text: string;
+  modelUsed: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+  cachedAt: number;
 }
 
 export interface SemanticCacheOptions {
   /** Similarity threshold (0-1). Default: 0.95. Min: 0.90 */
-  similarityThreshold?: number
+  similarityThreshold?: number;
   /** Skip cache entirely for this request */
-  bypass?: boolean
+  bypass?: boolean;
 }
 
 // ─── Upstash Vector client interface ─────────────────────────────────────────
 
 /** Minimal interface to avoid hard dep on @upstash/vector in tests */
 interface UpstashVectorClient {
-  upsert(args: { id: string; vector: number[]; metadata: SemanticCacheEntry }): Promise<unknown>
-  query(args: { vector: number[]; topK: number; includeMetadata: boolean }): Promise<
-    Array<{ score: number; metadata?: SemanticCacheEntry }>
-  >
-  delete(ids: string[]): Promise<unknown>
+  upsert(args: {
+    id: string;
+    vector: number[];
+    metadata: SemanticCacheEntry;
+  }): Promise<unknown>;
+  query(args: {
+    vector: number[];
+    topK: number;
+    includeMetadata: boolean;
+  }): Promise<Array<{ score: number; metadata?: SemanticCacheEntry }>>;
+  delete(ids: string[]): Promise<unknown>;
 }
 
 /** Minimal embedding function interface */
-type EmbedFn = (text: string) => Promise<number[]>
+type EmbedFn = (text: string) => Promise<number[]>;
 
 // ─── Factory function ─────────────────────────────────────────────────────────
 
@@ -84,8 +90,11 @@ type EmbedFn = (text: string) => Promise<number[]>
  * const semanticCache = createSemanticCache(vectorClient, embedFn)
  * ```
  */
-export function createSemanticCache(client: UpstashVectorClient, embedFn: EmbedFn) {
-  return new SemanticCache(client, embedFn)
+export function createSemanticCache(
+  client: UpstashVectorClient,
+  embedFn: EmbedFn,
+) {
+  return new SemanticCache(client, embedFn);
 }
 
 // ─── SemanticCache class ──────────────────────────────────────────────────────
@@ -112,55 +121,49 @@ export class SemanticCache {
     prompt: string,
     options: SemanticCacheOptions = {},
   ): Promise<SemanticCacheEntry | null> {
-    if (options.bypass) return null
+    if (options.bypass) return null;
 
     // Financial prompts: NEVER serve from semantic cache
-    const category = classifyCacheCategory(prompt)
+    const category = classifyCacheCategory(prompt);
     if (SYSTEM_FLOOR_TTL[category] === 0) {
-      log.debug({ category }, 'Semantic cache bypass: financial prompt')
-      return null
+      log.debug({ category }, "Semantic cache bypass: financial prompt");
+      return null;
     }
 
     const threshold = Math.max(
       SIMILARITY_FLOOR,
       options.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD,
-    )
+    );
 
     try {
-      const vector = await this.embedFn(prompt)
+      const vector = await this.embedFn(prompt);
       const results = await this.client.query({
         vector,
         topK: 1,
         includeMetadata: true,
-      })
+      });
 
-      const top = results[0]
+      const top = results[0];
       if (!top || top.score < threshold || !top.metadata) {
-        log.debug(
-          { score: top?.score, threshold },
-          'Semantic cache MISS',
-        )
-        return null
+        log.debug({ score: top?.score, threshold }, "Semantic cache MISS");
+        return null;
       }
 
-      log.info(
-        { score: top.score, model, category },
-        'Semantic cache HIT',
-      )
+      log.info({ score: top.score, model, category }, "Semantic cache HIT");
 
       // Record metric
       recordCacheHit({
-        cacheType: 'semantic',
+        cacheType: "semantic",
         model,
         savedTokens: top.metadata.tokensIn + top.metadata.tokensOut,
         savedUsd: top.metadata.costUsd,
-      })
+      });
 
-      return top.metadata
+      return top.metadata;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      log.warn({ err: msg }, 'Semantic cache get failed (non-fatal)')
-      return null
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn({ err: msg }, "Semantic cache get failed (non-fatal)");
+      return null;
     }
   }
 
@@ -173,23 +176,23 @@ export class SemanticCache {
   async set(
     model: string,
     prompt: string,
-    response: Omit<SemanticCacheEntry, 'cachedAt'>,
+    response: Omit<SemanticCacheEntry, "cachedAt">,
   ): Promise<void> {
-    const category = classifyCacheCategory(prompt)
+    const category = classifyCacheCategory(prompt);
     if (SYSTEM_FLOOR_TTL[category] === 0) {
-      return // financial: never store
+      return; // financial: never store
     }
 
     try {
-      const vector = await this.embedFn(prompt)
-      const id = `${model}:${Buffer.from(prompt).toString('base64').slice(0, 32)}`
-      const entry: SemanticCacheEntry = { ...response, cachedAt: Date.now() }
+      const vector = await this.embedFn(prompt);
+      const id = `${model}:${Buffer.from(prompt).toString("base64").slice(0, 32)}`;
+      const entry: SemanticCacheEntry = { ...response, cachedAt: Date.now() };
 
-      await this.client.upsert({ id, vector, metadata: entry })
-      log.debug({ model, category }, 'Semantic cache SET')
+      await this.client.upsert({ id, vector, metadata: entry });
+      log.debug({ model, category }, "Semantic cache SET");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      log.warn({ err: msg }, 'Semantic cache set failed (non-fatal)')
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn({ err: msg }, "Semantic cache set failed (non-fatal)");
     }
   }
 
@@ -197,9 +200,9 @@ export class SemanticCache {
    * Invalidate a specific entry by model + prompt.
    */
   async invalidate(model: string, prompt: string): Promise<void> {
-    const id = `${model}:${Buffer.from(prompt).toString('base64').slice(0, 32)}`
+    const id = `${model}:${Buffer.from(prompt).toString("base64").slice(0, 32)}`;
     try {
-      await this.client.delete([id])
+      await this.client.delete([id]);
     } catch {
       // Non-fatal
     }

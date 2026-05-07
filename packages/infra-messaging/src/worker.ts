@@ -9,25 +9,25 @@
  * This replaces custom heartbeat mechanism.
  * @see ADR-001: BullMQ stalled job detection
  */
-import { Worker, type Processor, type WorkerOptions } from 'bullmq'
-import type { QUEUE_NAMES } from '@bureau/contracts'
-import { getRedisConnection } from './redis.js'
+import { Worker, type Processor, type WorkerOptions } from "bullmq";
+import type { QUEUE_NAMES } from "@bureau/contracts";
+import { getRedisConnection } from "./redis.js";
 
-type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES]
+type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
 /** Bureau-standard worker options — applied to all workers */
 export const BUREAU_WORKER_OPTIONS = {
-  lockDuration: 60000,       // 60s lock per job
-  stalledInterval: 30000,    // Check stalled every 30s
-  maxStalledCount: 2,        // Retry max 2x before Failed state
-  concurrency: parseInt(process.env['BULLMQ_CONCURRENCY'] ?? '8', 10),
+  lockDuration: 60000, // 60s lock per job
+  stalledInterval: 30000, // Check stalled every 30s
+  maxStalledCount: 2, // Retry max 2x before Failed state
+  concurrency: parseInt(process.env["BULLMQ_CONCURRENCY"] ?? "8", 10),
   drainDelay: 5,
-} as const satisfies Partial<WorkerOptions>
+} as const satisfies Partial<WorkerOptions>;
 
 export interface BureauWorkerOptions {
-  concurrency?: number
+  concurrency?: number;
   /** Override lockDuration per worker if job type is known to be long */
-  lockDuration?: number
+  lockDuration?: number;
 }
 
 /**
@@ -48,20 +48,22 @@ export function createWorker<T extends Record<string, unknown>, R = void>(
     concurrency: options.concurrency ?? BUREAU_WORKER_OPTIONS.concurrency,
     lockDuration: options.lockDuration ?? BUREAU_WORKER_OPTIONS.lockDuration,
     connection: getRedisConnection(),
-  })
+  });
 
   // Standard error logging
-  worker.on('failed', (job, err) => {
+  worker.on("failed", (job, err) => {
     process.stderr.write(
-      `[Worker][${queueName}] Job ${job?.id ?? 'unknown'} failed: ${err.message}\n`,
-    )
-  })
+      `[Worker][${queueName}] Job ${job?.id ?? "unknown"} failed: ${err.message}\n`,
+    );
+  });
 
-  worker.on('stalled', (jobId) => {
-    process.stderr.write(`[Worker][${queueName}] Job ${jobId} stalled — will be requeued\n`)
-  })
+  worker.on("stalled", (jobId) => {
+    process.stderr.write(
+      `[Worker][${queueName}] Job ${jobId} stalled — will be requeued\n`,
+    );
+  });
 
-  return worker
+  return worker;
 }
 
 /**
@@ -71,8 +73,8 @@ export function createWorker<T extends Record<string, unknown>, R = void>(
 export function getAttemptReason(
   attemptsMade: number,
   isQaEscalation?: boolean,
-): 'initial' | 'stall_requeue' | 'qa_escalation' | 'user_retry' {
-  if (attemptsMade === 0) return 'initial'
-  if (isQaEscalation === true) return 'qa_escalation'
-  return 'stall_requeue'
+): "initial" | "stall_requeue" | "qa_escalation" | "user_retry" {
+  if (attemptsMade === 0) return "initial";
+  if (isQaEscalation === true) return "qa_escalation";
+  return "stall_requeue";
 }

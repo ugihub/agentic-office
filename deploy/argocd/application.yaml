@@ -29,9 +29,9 @@ spec:
 
   syncPolicy:
     automated:
-      prune: true        # Remove resources no longer in chart
-      selfHeal: true     # Re-apply if someone manually edits in cluster
-      allowEmpty: false  # Never sync to empty chart
+      prune: true # Remove resources no longer in chart
+      selfHeal: true # Re-apply if someone manually edits in cluster
+      allowEmpty: false # Never sync to empty chart
     syncOptions:
       - CreateNamespace=true
       - PrunePropagationPolicy=foreground
@@ -49,11 +49,11 @@ spec:
     - group: apps
       kind: Deployment
       jsonPointers:
-        - /spec/replicas  # Managed by HPA
+        - /spec/replicas # Managed by HPA
     - group: autoscaling
       kind: HorizontalPodAutoscaler
       jsonPointers:
-        - /spec/metrics  # May drift from HPA controller
+        - /spec/metrics # May drift from HPA controller
 
 ---
 # ArgoCD Image Updater — auto-update image tag on new GHCR push

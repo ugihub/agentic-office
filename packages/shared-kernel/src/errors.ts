@@ -8,15 +8,15 @@
 
 /** Base class for all Bureau domain errors */
 export abstract class BureauError extends Error {
-  abstract readonly code: string
-  readonly timestamp: Date
+  abstract readonly code: string;
+  readonly timestamp: Date;
 
   constructor(message: string, options?: ErrorOptions) {
-    super(message, options)
-    this.name = this.constructor.name
-    this.timestamp = new Date()
+    super(message, options);
+    this.name = this.constructor.name;
+    this.timestamp = new Date();
     // Maintain proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, new.target.prototype)
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 
   toJSON(): Record<string, unknown> {
@@ -25,14 +25,14 @@ export abstract class BureauError extends Error {
       name: this.name,
       message: this.message,
       timestamp: this.timestamp.toISOString(),
-    }
+    };
   }
 }
 
 // ── Budget Errors ────────────────────────────────────────────────────────────
 
 export class InsufficientBudgetError extends BureauError {
-  readonly code = 'BUDGET_INSUFFICIENT'
+  readonly code = "BUDGET_INSUFFICIENT";
 
   constructor(
     readonly tenantId: string,
@@ -41,7 +41,7 @@ export class InsufficientBudgetError extends BureauError {
   ) {
     super(
       `Insufficient budget for tenant ${tenantId}: required ${required}, available ${available}`,
-    )
+    );
   }
 
   override toJSON(): Record<string, unknown> {
@@ -50,41 +50,41 @@ export class InsufficientBudgetError extends BureauError {
       tenantId: this.tenantId,
       required: this.required,
       available: this.available,
-    }
+    };
   }
 }
 
 export class BudgetExhaustedError extends BureauError {
-  readonly code = 'BUDGET_EXHAUSTED'
+  readonly code = "BUDGET_EXHAUSTED";
 
   constructor(
     readonly tenantId: string,
     readonly taskId: string,
   ) {
-    super(`Budget exhausted for tenant ${tenantId} on task ${taskId}`)
+    super(`Budget exhausted for tenant ${tenantId} on task ${taskId}`);
   }
 }
 
 // ── Task Errors ──────────────────────────────────────────────────────────────
 
 export class TaskNotFoundError extends BureauError {
-  readonly code = 'TASK_NOT_FOUND'
+  readonly code = "TASK_NOT_FOUND";
 
   constructor(readonly taskId: string) {
-    super(`Task not found: ${taskId}`)
+    super(`Task not found: ${taskId}`);
   }
 }
 
 export class TaskAlreadyExistsError extends BureauError {
-  readonly code = 'TASK_ALREADY_EXISTS'
+  readonly code = "TASK_ALREADY_EXISTS";
 
   constructor(readonly taskId: string) {
-    super(`Task already exists: ${taskId}`)
+    super(`Task already exists: ${taskId}`);
   }
 }
 
 export class InvalidTaskStateError extends BureauError {
-  readonly code = 'INVALID_TASK_STATE'
+  readonly code = "INVALID_TASK_STATE";
 
   constructor(
     readonly taskId: string,
@@ -93,44 +93,44 @@ export class InvalidTaskStateError extends BureauError {
   ) {
     super(
       `Invalid state transition for task ${taskId}: cannot go from ${currentState} via ${attemptedTransition}`,
-    )
+    );
   }
 }
 
 export class TaskCancelledError extends BureauError {
-  readonly code = 'TASK_CANCELLED'
+  readonly code = "TASK_CANCELLED";
 
   constructor(readonly taskId: string) {
-    super(`Task ${taskId} has been cancelled`)
+    super(`Task ${taskId} has been cancelled`);
   }
 }
 
 // ── Agent Errors ─────────────────────────────────────────────────────────────
 
 export class AgentTimeoutError extends BureauError {
-  readonly code = 'AGENT_TIMEOUT'
+  readonly code = "AGENT_TIMEOUT";
 
   constructor(
     readonly agentId: string,
     readonly timeoutMs: number,
   ) {
-    super(`Agent ${agentId} timed out after ${timeoutMs}ms`)
+    super(`Agent ${agentId} timed out after ${timeoutMs}ms`);
   }
 }
 
 export class AgentCapacityError extends BureauError {
-  readonly code = 'AGENT_CAPACITY_EXCEEDED'
+  readonly code = "AGENT_CAPACITY_EXCEEDED";
 
   constructor(
     readonly division: string,
     readonly maxConcurrency: number,
   ) {
-    super(`Division ${division} at max concurrency: ${maxConcurrency}`)
+    super(`Division ${division} at max concurrency: ${maxConcurrency}`);
   }
 }
 
 export class MaxRetriesExceededError extends BureauError {
-  readonly code = 'MAX_RETRIES_EXCEEDED'
+  readonly code = "MAX_RETRIES_EXCEEDED";
 
   constructor(
     readonly taskId: string,
@@ -138,14 +138,17 @@ export class MaxRetriesExceededError extends BureauError {
     readonly maxRetries: number,
     readonly details?: string | undefined,
   ) {
-    super(details ?? `Max retries (${maxRetries}) exceeded for task ${taskId} in division ${division}`)
+    super(
+      details ??
+        `Max retries (${maxRetries}) exceeded for task ${taskId} in division ${division}`,
+    );
   }
 }
 
 // ── LLM Errors ───────────────────────────────────────────────────────────────
 
 export class LlmProviderError extends BureauError {
-  readonly code = 'LLM_PROVIDER_ERROR'
+  readonly code = "LLM_PROVIDER_ERROR";
 
   constructor(
     readonly provider: string,
@@ -153,132 +156,138 @@ export class LlmProviderError extends BureauError {
     message: string,
     options?: ErrorOptions,
   ) {
-    super(`LLM provider error [${provider}/${model}]: ${message}`, options)
+    super(`LLM provider error [${provider}/${model}]: ${message}`, options);
   }
 }
 
 export class LlmRateLimitError extends BureauError {
-  readonly code = 'LLM_RATE_LIMIT'
+  readonly code = "LLM_RATE_LIMIT";
 
   constructor(
     readonly provider: string,
     readonly retryAfterMs?: number,
   ) {
     super(
-      `Rate limited by ${provider}${retryAfterMs !== undefined ? `, retry after ${retryAfterMs}ms` : ''}`,
-    )
+      `Rate limited by ${provider}${retryAfterMs !== undefined ? `, retry after ${retryAfterMs}ms` : ""}`,
+    );
   }
 }
 
 export class TokenLimitExceededError extends BureauError {
-  readonly code = 'TOKEN_LIMIT_EXCEEDED'
+  readonly code = "TOKEN_LIMIT_EXCEEDED";
 
   constructor(
     readonly estimatedTokens: number,
     readonly maxTokens: number,
   ) {
-    super(`Estimated tokens ${estimatedTokens} exceeds max ${maxTokens}`)
+    super(`Estimated tokens ${estimatedTokens} exceeds max ${maxTokens}`);
   }
 }
 
 // ── Auth Errors ───────────────────────────────────────────────────────────────
 
 export class UnauthorizedError extends BureauError {
-  readonly code = 'UNAUTHORIZED'
+  readonly code = "UNAUTHORIZED";
 
-  constructor(message = 'Unauthorized') {
-    super(message)
+  constructor(message = "Unauthorized") {
+    super(message);
   }
 }
 
 export class ForbiddenError extends BureauError {
-  readonly code = 'FORBIDDEN'
+  readonly code = "FORBIDDEN";
 
   constructor(
     readonly tenantId: string,
     readonly resource: string,
   ) {
-    super(`Tenant ${tenantId} forbidden from accessing ${resource}`)
+    super(`Tenant ${tenantId} forbidden from accessing ${resource}`);
   }
 }
 
 export class ApiKeyNotFoundError extends BureauError {
-  readonly code = 'API_KEY_NOT_FOUND'
+  readonly code = "API_KEY_NOT_FOUND";
 
   constructor() {
-    super('API key not found or revoked')
+    super("API key not found or revoked");
   }
 }
 
 // ── Validation Errors ─────────────────────────────────────────────────────────
 
 export class ValidationError extends BureauError {
-  readonly code = 'VALIDATION_ERROR'
+  readonly code = "VALIDATION_ERROR";
 
   constructor(
     readonly field: string,
     readonly constraint: string,
   ) {
-    super(`Validation failed on field '${field}': ${constraint}`)
+    super(`Validation failed on field '${field}': ${constraint}`);
   }
 }
 
 export class SchemaVersionError extends BureauError {
-  readonly code = 'SCHEMA_VERSION_MISMATCH'
+  readonly code = "SCHEMA_VERSION_MISMATCH";
 
   constructor(
     readonly expected: string,
     readonly received: string,
   ) {
-    super(`Schema version mismatch: expected ${expected}, received ${received}`)
+    super(
+      `Schema version mismatch: expected ${expected}, received ${received}`,
+    );
   }
 }
 
 // ── Infrastructure Errors ─────────────────────────────────────────────────────
 
 export class DatabaseConnectionError extends BureauError {
-  readonly code = 'DB_CONNECTION_FAILED'
+  readonly code = "DB_CONNECTION_FAILED";
 
   constructor(message: string, options?: ErrorOptions) {
-    super(`Database connection failed: ${message}`, options)
+    super(`Database connection failed: ${message}`, options);
   }
 }
 
 export class CacheError extends BureauError {
-  readonly code = 'CACHE_ERROR'
+  readonly code = "CACHE_ERROR";
 
   constructor(message: string, options?: ErrorOptions) {
-    super(`Cache error: ${message}`, options)
+    super(`Cache error: ${message}`, options);
   }
 }
 
 export class OutboxPublishError extends BureauError {
-  readonly code = 'OUTBOX_PUBLISH_FAILED'
+  readonly code = "OUTBOX_PUBLISH_FAILED";
 
   constructor(
     readonly outboxId: string,
     message: string,
     options?: ErrorOptions,
   ) {
-    super(`Outbox ${outboxId} publish failed: ${message}`, options)
+    super(`Outbox ${outboxId} publish failed: ${message}`, options);
   }
 }
 
 // ── Compliance Errors ─────────────────────────────────────────────────────────
 
 export class ComplianceViolationError extends BureauError {
-  readonly code = 'COMPLIANCE_VIOLATION'
+  readonly code = "COMPLIANCE_VIOLATION";
 
   constructor(
-    readonly violationType: 'toxicity' | 'factuality' | 'schema' | 'prompt_injection',
+    readonly violationType:
+      | "toxicity"
+      | "factuality"
+      | "schema"
+      | "prompt_injection",
     readonly details: string,
   ) {
-    super(`Compliance violation [${violationType}]: ${details}`)
+    super(`Compliance violation [${violationType}]: ${details}`);
   }
 }
 
 // ── Type guard ────────────────────────────────────────────────────────────────
 
 export function isBureauError(error: unknown): error is BureauError {
-  return error instanceof BureauError
+  return error instanceof BureauError;
 }

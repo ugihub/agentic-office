@@ -7,26 +7,26 @@
 
 ## Tiers Overview
 
-| | **Starter** | **Growth** | **Scale** | **Self-hosted** |
-|--|-------------|------------|-----------|-----------------|
-| **Price** | Rp 49.000/mo | Rp 149.000/mo | Rp 349.000/mo | Free |
-| **Tasks/month** | 500 | 2.000 | 10.000 | Unlimited |
-| **Overage** | Rp 150/task | Rp 100/task | Rp 75/task | — |
-| **Divisions** | CEO + 2 | All 7 | All 7 | All 7 |
-| **MCP Plugin** | ✅ | ✅ | ✅ | ✅ |
-| **REST API** | ✅ | ✅ | ✅ | ✅ |
-| **SDK access** | ✅ | ✅ | ✅ | ✅ |
-| **Semantic cache** | ✅ | ✅ | ✅ | ✅ |
-| **Fast path** | ✅ | ✅ | ✅ | ✅ |
-| **Support** | Community | Email | Priority email + SLA | Self |
-| **SLA** | None | 99.5% | 99.9% | None |
-| **Data retention** | 7 days | 30 days | 90 days | Configurable |
-| **Audit log** | ❌ | ✅ | ✅ | ✅ |
-| **Custom divisions** | ❌ | ❌ | ✅ | ✅ |
-| **SSO (SAML/OIDC)** | ❌ | ❌ | ✅ | ✅ |
-| **Dedicated workers** | ❌ | ❌ | ✅ | — |
-| **Webhook events** | ❌ | ✅ | ✅ | ✅ |
-| **Budget alerts** | ❌ | ✅ | ✅ | ✅ |
+|                       | **Starter**  | **Growth**    | **Scale**            | **Self-hosted** |
+| --------------------- | ------------ | ------------- | -------------------- | --------------- |
+| **Price**             | Rp 49.000/mo | Rp 149.000/mo | Rp 349.000/mo        | Free            |
+| **Tasks/month**       | 500          | 2.000         | 10.000               | Unlimited       |
+| **Overage**           | Rp 150/task  | Rp 100/task   | Rp 75/task           | —               |
+| **Divisions**         | CEO + 2      | All 7         | All 7                | All 7           |
+| **MCP Plugin**        | ✅           | ✅            | ✅                   | ✅              |
+| **REST API**          | ✅           | ✅            | ✅                   | ✅              |
+| **SDK access**        | ✅           | ✅            | ✅                   | ✅              |
+| **Semantic cache**    | ✅           | ✅            | ✅                   | ✅              |
+| **Fast path**         | ✅           | ✅            | ✅                   | ✅              |
+| **Support**           | Community    | Email         | Priority email + SLA | Self            |
+| **SLA**               | None         | 99.5%         | 99.9%                | None            |
+| **Data retention**    | 7 days       | 30 days       | 90 days              | Configurable    |
+| **Audit log**         | ❌           | ✅            | ✅                   | ✅              |
+| **Custom divisions**  | ❌           | ❌            | ✅                   | ✅              |
+| **SSO (SAML/OIDC)**   | ❌           | ❌            | ✅                   | ✅              |
+| **Dedicated workers** | ❌           | ❌            | ✅                   | —               |
+| **Webhook events**    | ❌           | ✅            | ✅                   | ✅              |
+| **Budget alerts**     | ❌           | ✅            | ✅                   | ✅              |
 
 ---
 
@@ -39,6 +39,7 @@ Target: **individual developers and freelancers** testing Bureau or using it for
 **Included divisions:** CEO (routing) + choose 2 of: HR, Finance, Compliance, Production, QA, Marketing.
 
 **Limits:**
+
 - 500 tasks/month (hard cap, not rolling)
 - Max 1 concurrent task
 - Max prompt length: 4.000 tokens
@@ -46,6 +47,7 @@ Target: **individual developers and freelancers** testing Bureau or using it for
 - No team members (single user)
 
 **Notes:**
+
 - Starter division selection is fixed at sign-up. Change requires upgrade or contacting support.
 - No SLA — best-effort availability.
 - Tasks older than 7 days are purged from history.
@@ -59,6 +61,7 @@ Target: **small teams and agencies** running Bureau in production for client wor
 **Included divisions:** All 7 (CEO, HR, Finance, Compliance, Production, QA, Marketing).
 
 **Limits:**
+
 - 2.000 tasks/month
 - Max 5 concurrent tasks
 - Max prompt length: 16.000 tokens
@@ -79,6 +82,7 @@ Target: **product companies and enterprises** with high task volume and complian
 **Included divisions:** All 7 + ability to add custom division agents.
 
 **Limits:**
+
 - 10.000 tasks/month
 - Max 20 concurrent tasks
 - Max prompt length: 32.000 tokens
@@ -101,6 +105,7 @@ Target: **product companies and enterprises** with high task volume and complian
 Target: **enterprises with data sovereignty requirements** or developers wanting full control.
 
 **How to deploy:**
+
 ```bash
 git clone https://github.com/bureau-id/bureau.git
 cd bureau
@@ -109,12 +114,14 @@ docker compose up -d
 ```
 
 **Responsibilities:**
+
 - Provision and manage MongoDB, Redis, and LLM API keys
 - Monitor with included Prometheus + Grafana stack (or your own)
 - Apply security updates (Dependabot PRs in your fork)
 - Handle backups (Atlas backup scripts included in `deploy/scripts/`)
 
 **What's included:**
+
 - Full source code (MIT license)
 - Docker Compose stack (API server + workers + MongoDB + Redis + Grafana)
 - Helm chart for Kubernetes (`deploy/helm/bureau/`)
@@ -122,6 +129,7 @@ docker compose up -d
 - Operational runbook (`docs/runbook.md`)
 
 **What's not included:**
+
 - Hosted LLM API calls (you pay your own Anthropic/OpenAI bills)
 - Support (community Discord only)
 - Upstash Vector (configure your own or disable semantic cache)
@@ -134,11 +142,11 @@ docker compose up -d
 
 Overage is charged per-task after monthly allocation exhausted:
 
-| Tier | Overage rate |
-|------|-------------|
-| Starter | Rp 150/task |
-| Growth | Rp 100/task |
-| Scale | Rp 75/task |
+| Tier    | Overage rate |
+| ------- | ------------ |
+| Starter | Rp 150/task  |
+| Growth  | Rp 100/task  |
+| Scale   | Rp 75/task   |
 
 Overage billing is **post-paid**, invoiced at the start of the following month.
 
@@ -149,6 +157,7 @@ To avoid surprise bills, configure a **monthly overage cap** in the dashboard. W
 Bureau passes through actual LLM API costs (Anthropic, OpenAI, Google) at 1.2× to cover infrastructure overhead. These costs come out of the **per-task LLM budget** you configure, not the monthly subscription.
 
 Example:
+
 ```
 Task submitted with budget: Rp 5.000
 Actual Anthropic cost: Rp 3.200
@@ -178,6 +187,7 @@ If a task would exceed its LLM budget, the Finance agent halts execution and ent
 ## Fair Use Policy
 
 Bureau reserves the right to throttle or suspend accounts that:
+
 - Exceed 10× their task allocation in a single day
 - Submit prompts designed to circumvent Compliance agent policy
 - Use Bureau to generate content that violates our Terms of Service

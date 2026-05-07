@@ -3,15 +3,20 @@
  * cost_analytics: financial record, NOT conversation log.
  * outbox: transactional outbox for BullMQ reliability.
  */
-import { z } from 'zod'
-import { SchemaVersionSchema, ISODateSchema, DecimalStringSchema, DivisionSchema } from './common.js'
+import { z } from "zod";
+import {
+  SchemaVersionSchema,
+  ISODateSchema,
+  DecimalStringSchema,
+  DivisionSchema,
+} from "./common.js";
 
 /** Cost Analytics event — v1 (write path from day 1) */
 export const CostEventV1Schema = z
   .object({
     eventId: z.string().min(1),
     tenantId: z.string().min(1),
-    userId: z.string().nullable(),   // null after GDPR anonymization
+    userId: z.string().nullable(), // null after GDPR anonymization
     taskId: z.string().min(1),
     division: DivisionSchema,
     agentId: z.string().min(1),
@@ -25,7 +30,10 @@ export const CostEventV1Schema = z
 
     retryAttempt: z.number().int().nonnegative().default(0),
     isEscalated: z.boolean().default(false),
-    escalationTier: z.enum(['tier1', 'tier2', 'tier3']).nullable().default(null),
+    escalationTier: z
+      .enum(["tier1", "tier2", "tier3"])
+      .nullable()
+      .default(null),
 
     durationMs: z.number().int().nonnegative(),
     timestamp: ISODateSchema,
@@ -33,9 +41,9 @@ export const CostEventV1Schema = z
     anonymizedAt: ISODateSchema.nullable().default(null),
     schemaVersion: SchemaVersionSchema,
   })
-  .strip()
+  .strip();
 
-export type CostEventV1 = z.infer<typeof CostEventV1Schema>
+export type CostEventV1 = z.infer<typeof CostEventV1Schema>;
 
 /** Outbox entry — v1 */
 export const OutboxEntryV1Schema = z
@@ -43,7 +51,7 @@ export const OutboxEntryV1Schema = z
     outboxId: z.string().min(1),
     occurredAt: ISODateSchema,
     processedAt: ISODateSchema.nullable().default(null),
-    status: z.enum(['Pending', 'Completed', 'Failed']).default('Pending'),
+    status: z.enum(["Pending", "Completed", "Failed"]).default("Pending"),
     attempts: z.number().int().nonnegative().default(0),
     nextAttemptAt: ISODateSchema,
 
@@ -52,9 +60,9 @@ export const OutboxEntryV1Schema = z
     jobData: z.record(z.unknown()),
     headers: z.record(z.string()),
   })
-  .strip()
+  .strip();
 
-export type OutboxEntryV1 = z.infer<typeof OutboxEntryV1Schema>
+export type OutboxEntryV1 = z.infer<typeof OutboxEntryV1Schema>;
 
 /** API Key — v1 */
 export const ApiKeyV1Schema = z
@@ -65,8 +73,10 @@ export const ApiKeyV1Schema = z
     ownerId: z.string().min(1),
     tenantId: z.string().min(1),
     name: z.string().min(1).max(100),
-    status: z.enum(['active', 'revoked']),
-    permissions: z.array(z.enum(['task:write', 'task:read', 'keys:write', 'keys:read'])),
+    status: z.enum(["active", "revoked"]),
+    permissions: z.array(
+      z.enum(["task:write", "task:read", "keys:write", "keys:read"]),
+    ),
     rateLimit: z
       .object({
         requestsPerMinute: z.number().int().positive(),
@@ -84,6 +94,6 @@ export const ApiKeyV1Schema = z
     expiresAt: ISODateSchema.nullable().default(null),
     schemaVersion: SchemaVersionSchema,
   })
-  .strip()
+  .strip();
 
-export type ApiKeyV1 = z.infer<typeof ApiKeyV1Schema>
+export type ApiKeyV1 = z.infer<typeof ApiKeyV1Schema>;

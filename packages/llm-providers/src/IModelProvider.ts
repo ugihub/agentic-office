@@ -7,59 +7,59 @@
  *
  * Do NOT add new methods without at least two concrete use cases.
  */
-import type { Result } from '@bureau/shared-kernel'
+import type { Result } from "@bureau/shared-kernel";
 
 // ─── Core types ───────────────────────────────────────────────────────────────
 
 export interface GenerateOptions {
   /** System prompt (optional) */
-  system?: string | undefined
+  system?: string | undefined;
   /** User message / prompt */
-  prompt: string
+  prompt: string;
   /** Max output tokens */
-  maxTokens?: number | undefined
+  maxTokens?: number | undefined;
   /** Temperature 0-1 (default: model-specific) */
-  temperature?: number | undefined
+  temperature?: number | undefined;
   /** AbortSignal for cancellation */
-  signal?: AbortSignal | undefined
+  signal?: AbortSignal | undefined;
   /** Enable streaming (default: false) */
-  stream?: boolean | undefined
+  stream?: boolean | undefined;
 }
 
 export interface GenerateResult {
   /** Full generated text */
-  text: string
+  text: string;
   /** Input tokens consumed */
-  tokensIn: number
+  tokensIn: number;
   /** Output tokens generated */
-  tokensOut: number
+  tokensOut: number;
   /** Tokens served from prompt cache */
-  cachedTokens: number
+  cachedTokens: number;
   /** Actual cost in USD (calculated from pricing registry) */
-  costUsd: string
+  costUsd: string;
   /** Model that actually served the request (may differ if fallback used) */
-  modelUsed: string
+  modelUsed: string;
   /** Finish reason */
-  finishReason: 'stop' | 'length' | 'content_filter' | 'error'
+  finishReason: "stop" | "length" | "content_filter" | "error";
 }
 
 export interface StreamChunk {
-  delta: string
-  done: boolean
+  delta: string;
+  done: boolean;
 }
 
 export interface ProviderInfo {
-  name: string
-  supportedModels: readonly string[]
-  defaultModel: string
-  supportsStreaming: boolean
-  supportsPromptCaching: boolean
+  name: string;
+  supportedModels: readonly string[];
+  defaultModel: string;
+  supportsStreaming: boolean;
+  supportsPromptCaching: boolean;
 }
 
 // ─── IModelProvider ───────────────────────────────────────────────────────────
 
 export interface IModelProvider {
-  readonly info: ProviderInfo
+  readonly info: ProviderInfo;
 
   /**
    * Generate a response (non-streaming).
@@ -68,7 +68,7 @@ export interface IModelProvider {
   generate(
     model: string,
     options: GenerateOptions,
-  ): Promise<Result<GenerateResult, Error>>
+  ): Promise<Result<GenerateResult, Error>>;
 
   /**
    * Generate a streaming response.
@@ -78,10 +78,10 @@ export interface IModelProvider {
   generateStream(
     model: string,
     options: GenerateOptions,
-  ): AsyncGenerator<StreamChunk, GenerateResult, unknown>
+  ): AsyncGenerator<StreamChunk, GenerateResult, unknown>;
 
   /**
    * Check if this provider supports a given model.
    */
-  supportsModel(modelId: string): boolean
+  supportsModel(modelId: string): boolean;
 }

@@ -10,7 +10,7 @@ export {
   rootLogger,
   type LogContext,
   type BureauLogger,
-} from './logger.js'
+} from "./logger.js";
 
 export {
   initTelemetry,
@@ -19,7 +19,7 @@ export {
   injectTraceContext,
   withSpan,
   type TelemetryOptions,
-} from './otel.js'
+} from "./otel.js";
 
 export {
   recordTaskSubmitted,
@@ -35,4 +35,4 @@ export {
   recordSpendingAnomaly,
   recordCacheHit,
   recordComplianceViolation,
-} from './metrics.js'
+} from "./metrics.js";

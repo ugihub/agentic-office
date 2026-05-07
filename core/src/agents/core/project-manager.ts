@@ -8,209 +8,229 @@
  *
  * PM itself does NOT call LLM. It is a pure routing + planning agent.
  */
-import { type Result, ok, err, newId, EntityPrefix } from '@bureau/shared-kernel'
-import type { IHeadAgent, AgentContext, HeadAgentOutput } from '@bureau/agents-core'
-import { createLogger } from '@bureau/telemetry'
-import type { Division } from '@bureau/contracts'
+import {
+  type Result,
+  ok,
+  err,
+  newId,
+  EntityPrefix,
+} from "@bureau/shared-kernel";
+import type {
+  IHeadAgent,
+  AgentContext,
+  HeadAgentOutput,
+} from "@bureau/agents-core";
+import { createLogger } from "@bureau/telemetry";
+import type { Division } from "@bureau/contracts";
 
 export interface WorkOrder {
-  division: Division
-  priority: number
-  mustRunBefore: Division[]
-  canRunParallelWith: Division[]
-  skipReason?: string | undefined
+  division: Division;
+  priority: number;
+  mustRunBefore: Division[];
+  canRunParallelWith: Division[];
+  skipReason?: string | undefined;
 }
 
-type LegacyDivision = Division | 'HR' | 'Finance' | 'Compliance' | 'IT'
-type LegacyWorkOrder = Omit<WorkOrder, 'division' | 'mustRunBefore' | 'canRunParallelWith'> & {
-  division: LegacyDivision
-  mustRunBefore: LegacyDivision[]
-  canRunParallelWith: LegacyDivision[]
-}
+type LegacyDivision = Division | "HR" | "Finance" | "Compliance" | "IT";
+type LegacyWorkOrder = Omit<
+  WorkOrder,
+  "division" | "mustRunBefore" | "canRunParallelWith"
+> & {
+  division: LegacyDivision;
+  mustRunBefore: LegacyDivision[];
+  canRunParallelWith: LegacyDivision[];
+};
 
 export interface DecomposedPlan {
-  taskId: string
-  executionPath: 'fast' | 'standard' | 'full'
-  divisions: WorkOrder[]
+  taskId: string;
+  executionPath: "fast" | "standard" | "full";
+  divisions: WorkOrder[];
   /** Backward-compatible alias used by older E2E tests and docs. */
-  stages: LegacyWorkOrder[]
+  stages: LegacyWorkOrder[];
   /** Estimated stages in execution order */
-  stageSequence: string[]
+  stageSequence: string[];
 }
 
 // ─── Division plans per execution path ──────────────────────────────────────
 
 const FAST_PATH_DIVISIONS: WorkOrder[] = [
   {
-    division: 'Executive',
+    division: "Executive",
     priority: 1,
-    mustRunBefore: ['Production'],
+    mustRunBefore: ["Production"],
     canRunParallelWith: [],
   },
   {
-    division: 'FinanceSSC',
+    division: "FinanceSSC",
     priority: 2,
-    mustRunBefore: ['Production'],
-    canRunParallelWith: ['Executive'],
+    mustRunBefore: ["Production"],
+    canRunParallelWith: ["Executive"],
   },
   {
-    division: 'Production',
+    division: "Production",
     priority: 3,
-    mustRunBefore: ['Marketing'],
+    mustRunBefore: ["Marketing"],
     canRunParallelWith: [],
   },
   {
-    division: 'ComplianceSSC',
+    division: "ComplianceSSC",
     priority: 4,
-    mustRunBefore: ['Marketing'],
-    canRunParallelWith: ['Production'],
+    mustRunBefore: ["Marketing"],
+    canRunParallelWith: ["Production"],
     // Note: fast path uses schema-only validation
   },
   {
-    division: 'Marketing',
+    division: "Marketing",
     priority: 5,
     mustRunBefore: [],
     canRunParallelWith: [],
   },
-]
+];
 
 const STANDARD_PATH_DIVISIONS: WorkOrder[] = [
   {
-    division: 'Executive',
+    division: "Executive",
     priority: 1,
-    mustRunBefore: ['HRSSc', 'FinanceSSC', 'ComplianceSSC', 'ITSSC'],
+    mustRunBefore: ["HRSSc", "FinanceSSC", "ComplianceSSC", "ITSSC"],
     canRunParallelWith: [],
   },
   {
-    division: 'HRSSc',
+    division: "HRSSc",
     priority: 2,
-    mustRunBefore: ['Production'],
-    canRunParallelWith: ['FinanceSSC', 'ComplianceSSC', 'ITSSC'],
+    mustRunBefore: ["Production"],
+    canRunParallelWith: ["FinanceSSC", "ComplianceSSC", "ITSSC"],
   },
   {
-    division: 'FinanceSSC',
+    division: "FinanceSSC",
     priority: 2,
-    mustRunBefore: ['Production'],
-    canRunParallelWith: ['HRSSc', 'ComplianceSSC', 'ITSSC'],
+    mustRunBefore: ["Production"],
+    canRunParallelWith: ["HRSSc", "ComplianceSSC", "ITSSC"],
   },
   {
-    division: 'ComplianceSSC',
+    division: "ComplianceSSC",
     priority: 2,
-    mustRunBefore: ['Production'],
-    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ITSSC'],
+    mustRunBefore: ["Production"],
+    canRunParallelWith: ["HRSSc", "FinanceSSC", "ITSSC"],
   },
   {
-    division: 'ITSSC',
+    division: "ITSSC",
     priority: 2,
-    mustRunBefore: ['Production'],
-    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ComplianceSSC'],
+    mustRunBefore: ["Production"],
+    canRunParallelWith: ["HRSSc", "FinanceSSC", "ComplianceSSC"],
   },
   {
-    division: 'Production',
+    division: "Production",
     priority: 3,
-    mustRunBefore: ['QA'],
+    mustRunBefore: ["QA"],
     canRunParallelWith: [],
   },
   {
-    division: 'QA',
+    division: "QA",
     priority: 4,
-    mustRunBefore: ['Marketing'],
+    mustRunBefore: ["Marketing"],
     canRunParallelWith: [],
   },
   {
-    division: 'Marketing',
+    division: "Marketing",
     priority: 5,
     mustRunBefore: [],
     canRunParallelWith: [],
   },
-]
+];
 
 const FULL_PATH_DIVISIONS: WorkOrder[] = [
   {
-    division: 'Executive',
+    division: "Executive",
     priority: 1,
-    mustRunBefore: ['HRSSc', 'FinanceSSC', 'ComplianceSSC', 'ITSSC'],
+    mustRunBefore: ["HRSSc", "FinanceSSC", "ComplianceSSC", "ITSSC"],
     canRunParallelWith: [],
   },
   {
-    division: 'HRSSc',
+    division: "HRSSc",
     priority: 2,
-    mustRunBefore: ['Research'],
-    canRunParallelWith: ['FinanceSSC', 'ComplianceSSC', 'ITSSC'],
+    mustRunBefore: ["Research"],
+    canRunParallelWith: ["FinanceSSC", "ComplianceSSC", "ITSSC"],
   },
   {
-    division: 'FinanceSSC',
+    division: "FinanceSSC",
     priority: 2,
-    mustRunBefore: ['Research'],
-    canRunParallelWith: ['HRSSc', 'ComplianceSSC', 'ITSSC'],
+    mustRunBefore: ["Research"],
+    canRunParallelWith: ["HRSSc", "ComplianceSSC", "ITSSC"],
   },
   {
-    division: 'ComplianceSSC',
+    division: "ComplianceSSC",
     priority: 2,
-    mustRunBefore: ['Research'],
-    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ITSSC'],
+    mustRunBefore: ["Research"],
+    canRunParallelWith: ["HRSSc", "FinanceSSC", "ITSSC"],
   },
   {
-    division: 'ITSSC',
+    division: "ITSSC",
     priority: 2,
-    mustRunBefore: ['Research'],
-    canRunParallelWith: ['HRSSc', 'FinanceSSC', 'ComplianceSSC'],
+    mustRunBefore: ["Research"],
+    canRunParallelWith: ["HRSSc", "FinanceSSC", "ComplianceSSC"],
   },
   {
-    division: 'Research',
+    division: "Research",
     priority: 3,
-    mustRunBefore: ['Production'],
+    mustRunBefore: ["Production"],
     canRunParallelWith: [],
   },
   {
-    division: 'Production',
+    division: "Production",
     priority: 4,
-    mustRunBefore: ['QA'],
+    mustRunBefore: ["QA"],
     canRunParallelWith: [],
   },
   {
-    division: 'QA',
+    division: "QA",
     priority: 5,
-    mustRunBefore: ['Marketing'],
+    mustRunBefore: ["Marketing"],
     canRunParallelWith: [],
   },
   {
-    division: 'Marketing',
+    division: "Marketing",
     priority: 6,
     mustRunBefore: [],
     canRunParallelWith: [],
   },
-]
+];
 
 const STAGE_SEQUENCES = {
-  fast: ['Submitted', 'Preparing', 'Producing', 'Reviewing', 'Formatting', 'Completed'],
+  fast: [
+    "Submitted",
+    "Preparing",
+    "Producing",
+    "Reviewing",
+    "Formatting",
+    "Completed",
+  ],
   standard: [
-    'Submitted',
-    'Preparing',
-    'Producing',
-    'Reviewing',
-    'Formatting',
-    'Completed',
+    "Submitted",
+    "Preparing",
+    "Producing",
+    "Reviewing",
+    "Formatting",
+    "Completed",
   ],
   full: [
-    'Submitted',
-    'Preparing',
-    'Researching',
-    'Producing',
-    'Reviewing',
-    'Formatting',
-    'Completed',
+    "Submitted",
+    "Preparing",
+    "Researching",
+    "Producing",
+    "Reviewing",
+    "Formatting",
+    "Completed",
   ],
-} as const
+} as const;
 
 // ─── ProjectManagerAgent ─────────────────────────────────────────────────────
 
 export class ProjectManagerAgent implements IHeadAgent {
-  readonly division = 'Executive' as const
-  readonly agentId: string
+  readonly division = "Executive" as const;
+  readonly agentId: string;
 
   constructor() {
-    this.agentId = newId(EntityPrefix.AGENT)
+    this.agentId = newId(EntityPrefix.AGENT);
   }
 
   async execute(ctx: AgentContext): Promise<Result<HeadAgentOutput, Error>> {
@@ -219,15 +239,18 @@ export class ProjectManagerAgent implements IHeadAgent {
       correlationId: ctx.correlationId,
       division: this.division,
       agentId: this.agentId,
-    })
+    });
 
-    log.info({ executionPath: ctx.executionPath }, 'ProjectManager decomposing task')
+    log.info(
+      { executionPath: ctx.executionPath },
+      "ProjectManager decomposing task",
+    );
 
     if (ctx.signal.aborted) {
-      return err(new Error('Task cancelled before ProjectManager processing'))
+      return err(new Error("Task cancelled before ProjectManager processing"));
     }
 
-    const plan = decomposeTask(ctx.taskId, ctx.executionPath)
+    const plan = decomposeTask(ctx.taskId, ctx.executionPath);
 
     log.info(
       {
@@ -235,8 +258,8 @@ export class ProjectManagerAgent implements IHeadAgent {
         stageCount: plan.stageSequence.length,
         executionPath: plan.executionPath,
       },
-      'Task decomposed into plan',
-    )
+      "Task decomposed into plan",
+    );
 
     return ok({
       division: this.division,
@@ -248,25 +271,25 @@ export class ProjectManagerAgent implements IHeadAgent {
       tokensConsumed: 0, // PM never calls LLM
       durationMs: 0,
       workerCount: plan.divisions.length,
-    })
+    });
   }
 }
 
 /** Pure function — decompose a task into execution plan */
 export function decomposeTask(
   taskId: string,
-  executionPath: 'fast' | 'standard' | 'full' | string,
+  executionPath: "fast" | "standard" | "full" | string,
 ): DecomposedPlan {
-  const path = executionPath as 'fast' | 'standard' | 'full'
+  const path = executionPath as "fast" | "standard" | "full";
 
   const divisions =
-    path === 'fast'
+    path === "fast"
       ? FAST_PATH_DIVISIONS
-      : path === 'full'
+      : path === "full"
         ? FULL_PATH_DIVISIONS
-        : STANDARD_PATH_DIVISIONS
+        : STANDARD_PATH_DIVISIONS;
 
-  const stageSequence = STAGE_SEQUENCES[path] ?? STAGE_SEQUENCES.standard
+  const stageSequence = STAGE_SEQUENCES[path] ?? STAGE_SEQUENCES.standard;
 
   return {
     taskId,
@@ -274,7 +297,7 @@ export function decomposeTask(
     divisions: [...divisions],
     stages: divisions.map(toLegacyWorkOrder),
     stageSequence: [...stageSequence],
-  }
+  };
 }
 
 function toLegacyWorkOrder(order: WorkOrder): LegacyWorkOrder {
@@ -283,20 +306,20 @@ function toLegacyWorkOrder(order: WorkOrder): LegacyWorkOrder {
     division: toLegacyDivision(order.division),
     mustRunBefore: order.mustRunBefore.map(toLegacyDivision),
     canRunParallelWith: order.canRunParallelWith.map(toLegacyDivision),
-  }
+  };
 }
 
 function toLegacyDivision(division: Division): LegacyDivision {
   switch (division) {
-    case 'HRSSc':
-      return 'HR'
-    case 'FinanceSSC':
-      return 'Finance'
-    case 'ComplianceSSC':
-      return 'Compliance'
-    case 'ITSSC':
-      return 'IT'
+    case "HRSSc":
+      return "HR";
+    case "FinanceSSC":
+      return "Finance";
+    case "ComplianceSSC":
+      return "Compliance";
+    case "ITSSC":
+      return "IT";
     default:
-      return division
+      return division;
   }
 }

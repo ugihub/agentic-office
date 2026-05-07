@@ -13,32 +13,32 @@ import {
   importSPKI,
   type JWTPayload,
   type KeyLike,
-} from 'jose'
-import { type Result, ok, err } from '@bureau/shared-kernel'
-import { UnauthorizedError } from '@bureau/shared-kernel'
+} from "jose";
+import { type Result, ok, err } from "@bureau/shared-kernel";
+import { UnauthorizedError } from "@bureau/shared-kernel";
 
 export interface BureauJwtPayload extends JWTPayload {
-  sub: string           // userId
-  tenantId: string
-  permissions: string[]
-  typ: 'access'
+  sub: string; // userId
+  tenantId: string;
+  permissions: string[];
+  typ: "access";
 }
 
 export interface JwtSignOptions {
-  subject: string        // userId
-  tenantId: string
-  permissions: string[]
-  expiresIn?: string     // default: '1h'
-  issuer?: string
+  subject: string; // userId
+  tenantId: string;
+  permissions: string[];
+  expiresIn?: string; // default: '1h'
+  issuer?: string;
 }
 
 export interface JwtVerifyOptions {
-  issuer?: string
-  audience?: string
+  issuer?: string;
+  audience?: string;
 }
 
-let _privateKey: KeyLike | null = null
-let _publicKey: KeyLike | null = null
+let _privateKey: KeyLike | null = null;
+let _publicKey: KeyLike | null = null;
 
 /** Initialize JWT keys from PEM strings. Call at service startup. */
 export async function initJwtKeys(
@@ -46,11 +46,11 @@ export async function initJwtKeys(
   publicKeyPem: string,
 ): Promise<Result<void, Error>> {
   try {
-    _privateKey = await importPKCS8(privateKeyPem, 'RS256')
-    _publicKey = await importSPKI(publicKeyPem, 'RS256')
-    return ok(undefined)
+    _privateKey = await importPKCS8(privateKeyPem, "RS256");
+    _publicKey = await importSPKI(publicKeyPem, "RS256");
+    return ok(undefined);
   } catch (e) {
-    return err(e instanceof Error ? e : new Error(String(e)))
+    return err(e instanceof Error ? e : new Error(String(e)));
   }
 }
 
@@ -58,30 +58,37 @@ export async function initJwtKeys(
  * Sign a JWT token. Requires initJwtKeys() to have been called.
  * Returns Result<token, Error>.
  */
-export async function signJwt(options: JwtSignOptions): Promise<Result<string, Error>> {
+export async function signJwt(
+  options: JwtSignOptions,
+): Promise<Result<string, Error>> {
   if (_privateKey === null) {
-    return err(new Error('JWT private key not initialized. Call initJwtKeys() at startup.'))
+    return err(
+      new Error(
+        "JWT private key not initialized. Call initJwtKeys() at startup.",
+      ),
+    );
   }
 
   try {
-    const issuer = options.issuer ?? process.env['JWT_ISSUER'] ?? 'https://auth.bureau.id'
-    const expiresIn = options.expiresIn ?? '1h'
+    const issuer =
+      options.issuer ?? process.env["JWT_ISSUER"] ?? "https://auth.bureau.id";
+    const expiresIn = options.expiresIn ?? "1h";
 
     const token = await new SignJWT({
       tenantId: options.tenantId,
       permissions: options.permissions,
-      typ: 'access',
+      typ: "access",
     } satisfies Omit<BureauJwtPayload, keyof JWTPayload>)
-      .setProtectedHeader({ alg: 'RS256' })
+      .setProtectedHeader({ alg: "RS256" })
       .setSubject(options.subject)
       .setIssuer(issuer)
       .setIssuedAt()
       .setExpirationTime(expiresIn)
-      .sign(_privateKey)
+      .sign(_privateKey);
 
-    return ok(token)
+    return ok(token);
   } catch (e) {
-    return err(e instanceof Error ? e : new Error(String(e)))
+    return err(e instanceof Error ? e : new Error(String(e)));
   }
 }
 
@@ -94,27 +101,29 @@ export async function verifyJwt(
   options: JwtVerifyOptions = {},
 ): Promise<Result<BureauJwtPayload, UnauthorizedError>> {
   if (_publicKey === null) {
-    return err(new UnauthorizedError('JWT public key not initialized'))
+    return err(new UnauthorizedError("JWT public key not initialized"));
   }
 
   try {
-    const issuer = options.issuer ?? process.env['JWT_ISSUER'] ?? 'https://auth.bureau.id'
+    const issuer =
+      options.issuer ?? process.env["JWT_ISSUER"] ?? "https://auth.bureau.id";
 
     const { payload } = await jwtVerify(token, _publicKey, {
       issuer,
-      algorithms: ['RS256'],
-    })
+      algorithms: ["RS256"],
+    });
 
     if (
-      typeof payload['tenantId'] !== 'string' ||
-      !Array.isArray(payload['permissions'])
+      typeof payload["tenantId"] !== "string" ||
+      !Array.isArray(payload["permissions"])
     ) {
-      return err(new UnauthorizedError('Invalid token payload structure'))
+      return err(new UnauthorizedError("Invalid token payload structure"));
     }
 
-    return ok(payload as BureauJwtPayload)
+    return ok(payload as BureauJwtPayload);
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Token verification failed'
-    return err(new UnauthorizedError(`Invalid or expired token: ${message}`))
+    const message =
+      e instanceof Error ? e.message : "Token verification failed";
+    return err(new UnauthorizedError(`Invalid or expired token: ${message}`));
   }
 }

@@ -13,30 +13,30 @@ alerting:
       # Wire up Alertmanager when on-call paging is needed.
 
 scrape_configs:
-  - job_name: 'prometheus'
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
 
-  - job_name: 'bureau-api-server'
+  - job_name: "bureau-api-server"
     static_configs:
-      - targets: ['host.docker.internal:9100']
-    metrics_path: '/metrics'
+      - targets: ["host.docker.internal:9100"]
+    metrics_path: "/metrics"
 
-  - job_name: 'bureau-workers'
+  - job_name: "bureau-workers"
     static_configs:
-      - targets: ['host.docker.internal:9102']
-    metrics_path: '/metrics'
+      - targets: ["host.docker.internal:9102"]
+    metrics_path: "/metrics"
 
-  - job_name: 'bureau-mcp-server'
+  - job_name: "bureau-mcp-server"
     static_configs:
-      - targets: ['host.docker.internal:9101']
-    metrics_path: '/metrics'
+      - targets: ["host.docker.internal:9101"]
+    metrics_path: "/metrics"
 
-  - job_name: 'redis'
+  - job_name: "redis"
     static_configs:
-      - targets: ['redis:6379']
+      - targets: ["redis:6379"]
 
-  - job_name: 'mongodb'
+  - job_name: "mongodb"
     static_configs:
-      - targets: ['mongodb-exporter:9216']
-    metrics_path: '/metrics'
+      - targets: ["mongodb-exporter:9216"]
+    metrics_path: "/metrics"

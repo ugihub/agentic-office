@@ -7,16 +7,16 @@
  * NOTE: Read path (anomaly detection) can be added week 3-4 per plan.
  * Write path (recordLlmInvocation) is critical from day 1.
  */
-import { type Result, tryAsync } from '@bureau/shared-kernel'
-import { CostEventModel } from '@bureau/models'
+import { type Result, tryAsync } from "@bureau/shared-kernel";
+import { CostEventModel } from "@bureau/models";
 
 export interface SpendingAnomaly {
-  tenantId: string
-  currentHourUsd: number
-  avgDailyUsd7d: number
-  ratio: number
-  threshold: number
-  isAnomaly: boolean
+  tenantId: string;
+  currentHourUsd: number;
+  avgDailyUsd7d: number;
+  ratio: number;
+  threshold: number;
+  isAnomaly: boolean;
 }
 
 /**
@@ -30,42 +30,42 @@ export async function checkSpendingAnomaly(
   thresholdMultiplier = 3,
 ): Promise<Result<SpendingAnomaly, Error>> {
   return tryAsync(async () => {
-    const now = new Date()
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     // Current hour spend
     const currentHourEvents = await CostEventModel.find({
       tenantId,
       timestamp: { $gte: oneHourAgo },
     })
-      .select('costUsd')
+      .select("costUsd")
       .lean()
-      .exec()
+      .exec();
 
     const currentHourUsd = currentHourEvents.reduce(
       (sum: number, e) => sum + parseFloat(e.costUsd.toString()),
       0,
-    )
+    );
 
     // 7-day average (per day)
     const sevenDayEvents = await CostEventModel.find({
       tenantId,
       timestamp: { $gte: sevenDaysAgo, $lt: oneHourAgo },
     })
-      .select('costUsd')
+      .select("costUsd")
       .lean()
-      .exec()
+      .exec();
 
     const sevenDayTotal = sevenDayEvents.reduce(
       (sum: number, e) => sum + parseFloat(e.costUsd.toString()),
       0,
-    )
+    );
 
     // Convert to hourly average (7 days = 168 hours)
-    const avgHourlyUsd7d = sevenDayTotal / 168
+    const avgHourlyUsd7d = sevenDayTotal / 168;
 
-    const ratio = avgHourlyUsd7d > 0 ? currentHourUsd / avgHourlyUsd7d : 0
+    const ratio = avgHourlyUsd7d > 0 ? currentHourUsd / avgHourlyUsd7d : 0;
 
     return {
       tenantId,
@@ -74,6 +74,6 @@ export async function checkSpendingAnomaly(
       ratio,
       threshold: thresholdMultiplier,
       isAnomaly: ratio > thresholdMultiplier,
-    }
-  })
+    };
+  });
 }

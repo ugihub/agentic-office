@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Last Updated:** 2026-05-05  
-**On-Call:** platform@bureau.id  
+**On-Call:** platform@bureau.id
 
 ---
 
@@ -45,16 +45,16 @@ Observability stack:
 
 ### Key Ports
 
-| Service | Port | Purpose |
-|---|---|---|
-| API Server | 3001 | HTTP API |
-| API Server metrics | 9100 | Prometheus scrape |
-| Workers metrics | 9102 | Prometheus scrape |
-| Prometheus | 9090 | Metrics storage |
-| Grafana | 3001 (ext) | Dashboards |
-| Jaeger UI | 16686 | Trace viewer |
-| Redis | 6379 | BullMQ + cache |
-| MongoDB | 27017 | Primary state |
+| Service            | Port       | Purpose           |
+| ------------------ | ---------- | ----------------- |
+| API Server         | 3001       | HTTP API          |
+| API Server metrics | 9100       | Prometheus scrape |
+| Workers metrics    | 9102       | Prometheus scrape |
+| Prometheus         | 9090       | Metrics storage   |
+| Grafana            | 3001 (ext) | Dashboards        |
+| Jaeger UI          | 16686      | Trace viewer      |
+| Redis              | 6379       | BullMQ + cache    |
+| MongoDB            | 27017      | Primary state     |
 
 ### Health Checks
 
@@ -71,7 +71,7 @@ curl http://localhost:3001/health/ready
 ## 2. Alert: BureauApiHighErrorRate
 
 **Severity:** CRITICAL  
-**Trigger:** 5xx error rate > 1% for 2 minutes  
+**Trigger:** 5xx error rate > 1% for 2 minutes
 
 ### Likely Causes
 
@@ -101,12 +101,12 @@ docker exec bureau-redis redis-cli ping
 
 ### Remediation
 
-| Root Cause | Action |
-|---|---|
-| MongoDB down | Failover to Atlas replica — check Atlas dashboard |
-| Redis down | Restart Redis: `docker restart bureau-redis` |
-| App crash loop | Restart API server: `kubectl rollout restart deploy/bureau-api-server` |
-| JWT key missing | Inject `JWT_PUBLIC_KEY` + `JWT_PRIVATE_KEY` via Doppler |
+| Root Cause      | Action                                                                 |
+| --------------- | ---------------------------------------------------------------------- |
+| MongoDB down    | Failover to Atlas replica — check Atlas dashboard                      |
+| Redis down      | Restart Redis: `docker restart bureau-redis`                           |
+| App crash loop  | Restart API server: `kubectl rollout restart deploy/bureau-api-server` |
+| JWT key missing | Inject `JWT_PUBLIC_KEY` + `JWT_PRIVATE_KEY` via Doppler                |
 
 ### Escalation
 
@@ -117,7 +117,7 @@ If not resolved in 10 minutes → page engineering lead.
 ## 3. Alert: BureauApiHighLatencyP99
 
 **Severity:** WARNING  
-**Trigger:** POST /tasks p99 > 500ms for 5 minutes  
+**Trigger:** POST /tasks p99 > 500ms for 5 minutes
 
 ### Likely Causes
 
@@ -145,19 +145,19 @@ docker exec bureau-redis redis-cli info memory | grep used_memory_human
 
 ### Remediation
 
-| Root Cause | Action |
-|---|---|
-| Queue backlog | Scale workers: `kubectl scale deploy/bureau-workers --replicas=5` |
+| Root Cause         | Action                                                                       |
+| ------------------ | ---------------------------------------------------------------------------- |
+| Queue backlog      | Scale workers: `kubectl scale deploy/bureau-workers --replicas=5`            |
 | MongoDB slow query | Add index or optimize query — see `deploy/mongo-init.js` for index reference |
-| Redis memory | Increase Redis memory limit or flush expired keys |
-| CPU throttle | Increase CPU limit in Helm values: `resources.limits.cpu` |
+| Redis memory       | Increase Redis memory limit or flush expired keys                            |
+| CPU throttle       | Increase CPU limit in Helm values: `resources.limits.cpu`                    |
 
 ---
 
 ## 4. Alert: BureauSpendingAnomalyDetected
 
 **Severity:** WARNING  
-**Trigger:** Tenant spending > 3x rolling 7-day average  
+**Trigger:** Tenant spending > 3x rolling 7-day average
 
 ### Likely Causes
 
@@ -194,19 +194,19 @@ db.api_keys.findOne({ tenantId: 'TENANT_ID' }, { usage: 1, lastUsedAt: 1 })
 
 ### Remediation
 
-| Root Cause | Action |
-|---|---|
-| Legitimate spike | Acknowledge and monitor — contact tenant |
-| Runaway loop | Freeze tenant budget: `db.budgets.updateOne({tenantId}, {\$set: {isFrozen: true}})` |
-| Compromised key | Revoke key: `DELETE /auth/keys/:keyId` |
-| Bug in agent | Hotfix + deploy → coordinate with engineering |
+| Root Cause       | Action                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| Legitimate spike | Acknowledge and monitor — contact tenant                                            |
+| Runaway loop     | Freeze tenant budget: `db.budgets.updateOne({tenantId}, {\$set: {isFrozen: true}})` |
+| Compromised key  | Revoke key: `DELETE /auth/keys/:keyId`                                              |
+| Bug in agent     | Hotfix + deploy → coordinate with engineering                                       |
 
 ---
 
 ## 5. Alert: BureauQueueDepthHigh
 
 **Severity:** CRITICAL (>1000) / WARNING (>500)  
-**Trigger:** BullMQ division queue depth exceeds threshold  
+**Trigger:** BullMQ division queue depth exceeds threshold
 
 ### Likely Causes
 
@@ -251,7 +251,7 @@ kubectl scale deploy/bureau-workers --replicas=10
 ## 6. Alert: BureauAwaitingDecisionHigh
 
 **Severity:** WARNING  
-**Trigger:** >10 tasks in AwaitingUserDecision for 30 minutes  
+**Trigger:** >10 tasks in AwaitingUserDecision for 30 minutes
 
 ### Likely Causes
 
@@ -290,10 +290,10 @@ db.task_envelopes.find(
 
 ### Remediation
 
-| Root Cause | Action |
-|---|---|
-| Email API key invalid | Update `RESEND_API_KEY` in Doppler → restart workers |
-| Timeout worker crashed | `kubectl rollout restart deploy/bureau-workers` |
+| Root Cause               | Action                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| Email API key invalid    | Update `RESEND_API_KEY` in Doppler → restart workers                            |
+| Timeout worker crashed   | `kubectl rollout restart deploy/bureau-workers`                                 |
 | UI not showing decisions | Forward to product team — check dashboard GET /tasks?stage=AwaitingUserDecision |
 
 ---
@@ -301,7 +301,7 @@ db.task_envelopes.find(
 ## 7. Alert: BureauEscalationRateHigh
 
 **Severity:** WARNING  
-**Trigger:** Escalation rate > 30% for 30 minutes  
+**Trigger:** Escalation rate > 30% for 30 minutes
 
 ### Likely Causes
 
@@ -336,18 +336,18 @@ db.task_envelopes.find(
 
 ### Remediation
 
-| Root Cause | Action |
-|---|---|
-| Economy model underperforming | Rotate economy model in HR SSC MODEL_REGISTRY |
-| QA too strict | Review QA thresholds — coordinate with product |
-| Provider quality drop | Switch default economy tier to different provider |
+| Root Cause                    | Action                                            |
+| ----------------------------- | ------------------------------------------------- |
+| Economy model underperforming | Rotate economy model in HR SSC MODEL_REGISTRY     |
+| QA too strict                 | Review QA thresholds — coordinate with product    |
+| Provider quality drop         | Switch default economy tier to different provider |
 
 ---
 
 ## 8. Alert: BureauPromptInjectionSpike
 
 **Severity:** CRITICAL  
-**Trigger:** >0.1 injection attempts/sec over 15 minutes  
+**Trigger:** >0.1 injection attempts/sec over 15 minutes
 
 **SECURITY INCIDENT — Follow incident response procedure immediately.**
 
@@ -399,7 +399,7 @@ curl -X DELETE https://api.bureau.id/api/v1/auth/keys/KEY_ID \
 ## 9. Alert: BureauLlmCostBurnRateHigh
 
 **Severity:** WARNING  
-**Trigger:** LLM burn rate > $100/hour for 10 minutes  
+**Trigger:** LLM burn rate > $100/hour for 10 minutes
 
 ### Likely Causes
 
@@ -546,16 +546,16 @@ Bureau uses strict schemas with explicit `schemaVersion`. If a migration is prob
 
 ## 13. SLO Reference
 
-| Metric | Target | Alert |
-|---|---|---|
-| POST /tasks availability | 99.9% per month | < 99.0% → CRITICAL |
-| POST /tasks p95 latency | < 500ms (API overhead, excl. LLM) | > 500ms → WARNING |
-| Fast path p95 end-to-end | < 3 seconds | > 5s → WARNING |
-| Full path p99 end-to-end | < 60 seconds | > 120s → WARNING |
-| AwaitingUserDecision resolution | > 70% in 2 hours | < 50% → WARNING |
-| Data durability | 99.999999999% (Atlas) | N/A |
-| RPO | 5 minutes | > 10min → CRITICAL |
-| RTO | 30 minutes | > 60min → CRITICAL |
+| Metric                          | Target                            | Alert              |
+| ------------------------------- | --------------------------------- | ------------------ |
+| POST /tasks availability        | 99.9% per month                   | < 99.0% → CRITICAL |
+| POST /tasks p95 latency         | < 500ms (API overhead, excl. LLM) | > 500ms → WARNING  |
+| Fast path p95 end-to-end        | < 3 seconds                       | > 5s → WARNING     |
+| Full path p99 end-to-end        | < 60 seconds                      | > 120s → WARNING   |
+| AwaitingUserDecision resolution | > 70% in 2 hours                  | < 50% → WARNING    |
+| Data durability                 | 99.999999999% (Atlas)             | N/A                |
+| RPO                             | 5 minutes                         | > 10min → CRITICAL |
+| RTO                             | 30 minutes                        | > 60min → CRITICAL |
 
 ### Error Budget Calculation
 
@@ -569,5 +569,5 @@ If budget < 10% remaining → freeze ALL deployments
 
 ---
 
-*Runbook version 1.0 — Bureau Phase 9 Production Hardening.*  
-*Update this document whenever alert behavior changes.*
+_Runbook version 1.0 — Bureau Phase 9 Production Hardening._  
+_Update this document whenever alert behavior changes._

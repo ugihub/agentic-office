@@ -2,7 +2,7 @@
  * Task Envelope schema — primary domain object for Bureau tasks.
  * Maps to the task_envelopes MongoDB collection.
  */
-import { z } from 'zod'
+import { z } from "zod";
 import {
   SchemaVersionSchema,
   ISODateSchema,
@@ -11,7 +11,7 @@ import {
   ExecutionPathSchema,
   TaskStageSchema,
   OutputQualitySchema,
-} from './common.js'
+} from "./common.js";
 
 /** Escalation chain entry — pre-approved by Finance SSC */
 const EscalationEntrySchema = z
@@ -20,7 +20,7 @@ const EscalationEntrySchema = z
     model: z.string().min(1),
     maxCostUsd: DecimalStringSchema,
   })
-  .strip()
+  .strip();
 
 /** Budget section */
 const TaskBudgetSchema = z
@@ -44,7 +44,7 @@ const TaskBudgetSchema = z
         .strip(),
     ),
   })
-  .strip()
+  .strip();
 
 /** Routing section */
 const TaskRoutingSchema = z
@@ -57,7 +57,7 @@ const TaskRoutingSchema = z
     decidedBy: z.string(),
     decidedAt: ISODateSchema,
   })
-  .strip()
+  .strip();
 
 /** Original request section */
 const OriginalRequestSchema = z
@@ -67,18 +67,18 @@ const OriginalRequestSchema = z
       .object({
         maxCostUsd: DecimalStringSchema,
         maxLatencyMs: z.number().int().positive(),
-        preferredModelTier: z.enum(['economy', 'standard', 'premium']),
+        preferredModelTier: z.enum(["economy", "standard", "premium"]),
       })
       .strip(),
-    outputFormat: z.enum(['markdown', 'json', 'text', 'html']),
+    outputFormat: z.enum(["markdown", "json", "text", "html"]),
     metadata: z.record(z.unknown()).default({}),
   })
-  .strip()
+  .strip();
 
 /** AwaitingUserDecision pending decision */
 const PendingDecisionSchema = z
   .object({
-    reason: z.literal('budget_insufficient_for_escalation'),
+    reason: z.literal("budget_insufficient_for_escalation"),
     attemptNumber: z.number().int().positive(),
     bestEffortOutput: z
       .object({
@@ -94,11 +94,11 @@ const PendingDecisionSchema = z
       })
       .strip(),
     expiresAt: ISODateSchema,
-    defaultAction: z.enum(['best_effort', 'add_budget', 'cancel']),
+    defaultAction: z.enum(["best_effort", "add_budget", "cancel"]),
     notifiedAt: ISODateSchema.nullable(),
   })
   .strip()
-  .nullable()
+  .nullable();
 
 /** State transition log entry */
 const StateTransitionSchema = z
@@ -109,7 +109,7 @@ const StateTransitionSchema = z
     byAgent: z.string(),
     correlationId: z.string(),
   })
-  .strip()
+  .strip();
 
 /** Full Task Envelope — v1 */
 export const TaskEnvelopeV1Schema = z
@@ -171,11 +171,11 @@ export const TaskEnvelopeV1Schema = z
     schemaVersion: SchemaVersionSchema,
     updatedAt: ISODateSchema,
   })
-  .strip()
+  .strip();
 
-export type TaskEnvelopeV1 = z.infer<typeof TaskEnvelopeV1Schema>
-export type PendingDecision = z.infer<typeof PendingDecisionSchema>
-export type EscalationEntry = z.infer<typeof EscalationEntrySchema>
+export type TaskEnvelopeV1 = z.infer<typeof TaskEnvelopeV1Schema>;
+export type PendingDecision = z.infer<typeof PendingDecisionSchema>;
+export type EscalationEntry = z.infer<typeof EscalationEntrySchema>;
 
 /** POST /tasks request body */
 export const CreateTaskRequestSchema = z
@@ -185,25 +185,29 @@ export const CreateTaskRequestSchema = z
       .object({
         maxCostUsd: PositiveDecimalSchema.optional(),
         maxLatencyMs: z.number().int().positive().optional(),
-        preferredModelTier: z.enum(['economy', 'standard', 'premium']).optional(),
+        preferredModelTier: z
+          .enum(["economy", "standard", "premium"])
+          .optional(),
       })
       .strip()
       .optional(),
-    outputFormat: z.enum(['markdown', 'json', 'text', 'html']).default('markdown'),
+    outputFormat: z
+      .enum(["markdown", "json", "text", "html"])
+      .default("markdown"),
     metadata: z.record(z.unknown()).optional(),
   })
-  .strip()
+  .strip();
 
-export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>
+export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>;
 
 /** POST /tasks/:taskId/decision request body */
 export const TaskDecisionRequestSchema = z
   .object({
-    action: z.enum(['best_effort', 'add_budget', 'cancel']),
+    action: z.enum(["best_effort", "add_budget", "cancel"]),
   })
-  .strip()
+  .strip();
 
-export type TaskDecisionRequest = z.infer<typeof TaskDecisionRequestSchema>
+export type TaskDecisionRequest = z.infer<typeof TaskDecisionRequestSchema>;
 
 /** POST /tasks/:taskId/feedback request body */
 export const TaskFeedbackRequestSchema = z
@@ -211,9 +215,9 @@ export const TaskFeedbackRequestSchema = z
     rating: z.number().int().min(1).max(5),
     comment: z.string().max(2000).optional(),
   })
-  .strip()
+  .strip();
 
-export type TaskFeedbackRequest = z.infer<typeof TaskFeedbackRequestSchema>
+export type TaskFeedbackRequest = z.infer<typeof TaskFeedbackRequestSchema>;
 
 /** GET /tasks/:taskId/status response */
 export const TaskStatusResponseSchema = z
@@ -231,6 +235,6 @@ export const TaskStatusResponseSchema = z
       qa: z.number().int(),
     }),
   })
-  .strip()
+  .strip();
 
-export type TaskStatusResponse = z.infer<typeof TaskStatusResponseSchema>
+export type TaskStatusResponse = z.infer<typeof TaskStatusResponseSchema>;

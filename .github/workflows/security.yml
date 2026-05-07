@@ -3,19 +3,19 @@ name: Security Scan
 on:
   schedule:
     # Run every Monday at 08:00 UTC
-    - cron: '0 8 * * 1'
+    - cron: "0 8 * * 1"
   push:
     branches: [main, master]
   workflow_dispatch:
     inputs:
       fix:
-        description: 'Auto-fix pnpm audit vulnerabilities'
+        description: "Auto-fix pnpm audit vulnerabilities"
         type: boolean
         default: false
 
 permissions:
   contents: read
-  security-events: write  # Required for uploading SARIF to GitHub Security tab
+  security-events: write # Required for uploading SARIF to GitHub Security tab
 
 jobs:
   pnpm-audit:
@@ -27,13 +27,13 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '9'
+          version: "9"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -53,19 +53,19 @@ jobs:
       - name: Run Trivy vulnerability scanner (filesystem)
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
+          scan-type: "fs"
+          scan-ref: "."
           trivy-config: tests/security/.trivyignore
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'HIGH,CRITICAL'
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "HIGH,CRITICAL"
           ignore-unfixed: false
 
       - name: Upload Trivy SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
   secret-scan:
     name: Secret Detection
@@ -73,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for secret detection
+          fetch-depth: 0 # Full history for secret detection
 
       - name: Run secret detection
         run: |
@@ -118,13 +118,13 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '9'
+          version: "9"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -148,20 +148,20 @@ jobs:
       - name: Build API server image
         run: |
           docker build -f deploy/Dockerfile.api-server -t bureau-api-server:scan .
-        continue-on-error: true  # Build may fail without real deps — scan the FS instead
+        continue-on-error: true # Build may fail without real deps — scan the FS instead
 
       - name: Scan API server image
         uses: aquasecurity/trivy-action@master
         if: success()
         with:
-          image-ref: 'bureau-api-server:scan'
-          format: 'sarif'
-          output: 'trivy-docker.sarif'
-          severity: 'HIGH,CRITICAL'
+          image-ref: "bureau-api-server:scan"
+          format: "sarif"
+          output: "trivy-docker.sarif"
+          severity: "HIGH,CRITICAL"
 
       - name: Upload Docker scan SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-docker.sarif'
+          sarif_file: "trivy-docker.sarif"
         continue-on-error: true

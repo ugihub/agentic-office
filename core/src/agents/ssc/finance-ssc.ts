@@ -12,34 +12,40 @@
  *
  * @see Plan section 8: Atomic Budget Reservation
  */
-import { Types, type Model } from 'mongoose'
-import { type Result, ok, err, newId, EntityPrefix } from '@bureau/shared-kernel'
-import { InsufficientBudgetError } from '@bureau/shared-kernel'
-import { Money } from '@bureau/shared-kernel'
-import type { BudgetDocument } from '@bureau/models'
+import { Types, type Model } from "mongoose";
+import {
+  type Result,
+  ok,
+  err,
+  newId,
+  EntityPrefix,
+} from "@bureau/shared-kernel";
+import { InsufficientBudgetError } from "@bureau/shared-kernel";
+import { Money } from "@bureau/shared-kernel";
+import type { BudgetDocument } from "@bureau/models";
 
 export interface EscalationEntry {
-  attempt: number
-  model: string
-  maxCostUsd: string
+  attempt: number;
+  model: string;
+  maxCostUsd: string;
 }
 
 export interface BudgetReservationRequest {
-  taskId: string
-  tenantId: string
+  taskId: string;
+  tenantId: string;
   /** Total estimated cost for ALL attempts in escalation chain */
-  totalEstimatedCostUsd: string
-  escalationChain: EscalationEntry[]
+  totalEstimatedCostUsd: string;
+  escalationChain: EscalationEntry[];
 }
 
 export interface BudgetReservationResult {
-  reserved: boolean
-  remainingAfterUsd: string
-  reservationId: string
+  reserved: boolean;
+  remainingAfterUsd: string;
+  reservationId: string;
 }
 
 export interface FinanceSscDeps {
-  budgetModel: Model<BudgetDocument>
+  budgetModel: Model<BudgetDocument>;
 }
 
 /**
@@ -52,12 +58,12 @@ export async function reserveBudgetAtomic(
   deps: FinanceSscDeps,
   request: BudgetReservationRequest,
 ): Promise<Result<BudgetReservationResult, InsufficientBudgetError | Error>> {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
 
-  const estimatedCost = Money.usd(request.totalEstimatedCostUsd)
-  const estimatedDecimal = estimatedCost.toDecimalString()
+  const estimatedCost = Money.usd(request.totalEstimatedCostUsd);
+  const estimatedDecimal = estimatedCost.toDecimalString();
 
   // ATOMIC: condition + update in single operation
   // If remaining < estimatedCost → findOneAndUpdate returns null → insufficient
@@ -87,18 +93,21 @@ export async function reserveBudgetAtomic(
       },
       { new: true },
     )
-    .exec()
+    .exec();
 
   if (result === null) {
     // Either no budget found OR remaining < estimated — both = insufficient
     const existing = await deps.budgetModel
-      .findOne({ tenantId: request.tenantId, periodYear: year, periodMonth: month })
-      .select('remaining isFrozen')
-      .exec()
+      .findOne({
+        tenantId: request.tenantId,
+        periodYear: year,
+        periodMonth: month,
+      })
+      .select("remaining isFrozen")
+      .exec();
 
-    const available = existing?.remaining !== undefined
-      ? existing.remaining.toString()
-      : '0'
+    const available =
+      existing?.remaining !== undefined ? existing.remaining.toString() : "0";
 
     return err(
       new InsufficientBudgetError(
@@ -106,23 +115,23 @@ export async function reserveBudgetAtomic(
         request.totalEstimatedCostUsd,
         available,
       ),
-    )
+    );
   }
 
   // Check if we just crossed 80% warning threshold
   if (result.totalUsd !== undefined && result.remaining !== undefined) {
-    const total = Money.usd(result.totalUsd.toString())
-    const remaining = Money.usd(result.remaining.toString())
-    const usagePercent = 1 - remaining.amount.div(total.amount).toNumber()
+    const total = Money.usd(result.totalUsd.toString());
+    const remaining = Money.usd(result.remaining.toString());
+    const usagePercent = 1 - remaining.amount.div(total.amount).toNumber();
 
     if (usagePercent >= 0.8 && result.warningEmailSentAt === null) {
-    // Flag for email — actual send in background job
-    await deps.budgetModel
-      .updateOne(
-        { _id: result._id, warningEmailSentAt: null },
-        { $set: { warningEmailSentAt: now } },
-      )
-      .exec()
+      // Flag for email — actual send in background job
+      await deps.budgetModel
+        .updateOne(
+          { _id: result._id, warningEmailSentAt: null },
+          { $set: { warningEmailSentAt: now } },
+        )
+        .exec();
     }
   }
 
@@ -130,7 +139,7 @@ export async function reserveBudgetAtomic(
     reserved: true,
     remainingAfterUsd: result.remaining.toString(),
     reservationId: newId(EntityPrefix.COST_EVENT),
-  })
+  });
 }
 
 /**
@@ -144,20 +153,20 @@ export async function releaseBudget(
   actualCostUsd: string,
   reservedCostUsd: string,
 ): Promise<Result<void, Error>> {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
 
-  const reserved = Money.usd(reservedCostUsd)
-  const actual = Money.usd(actualCostUsd)
-  const refund = reserved.subtract(actual)
+  const reserved = Money.usd(reservedCostUsd);
+  const actual = Money.usd(actualCostUsd);
+  const refund = reserved.subtract(actual);
 
   if (refund.isNegative() || refund.isZero()) {
     // No refund to give — actual cost >= reserved
-    return ok(undefined)
+    return ok(undefined);
   }
 
-  const refundStr = refund.toDecimalString()
+  const refundStr = refund.toDecimalString();
 
   try {
     await deps.budgetModel
@@ -173,11 +182,11 @@ export async function releaseBudget(
           },
         },
       )
-      .exec()
+      .exec();
 
-    return ok(undefined)
+    return ok(undefined);
   } catch (e) {
-    return err(e instanceof Error ? e : new Error(String(e)))
+    return err(e instanceof Error ? e : new Error(String(e)));
   }
 }
 
@@ -191,31 +200,31 @@ export async function preApproveEscalationChain(
   tenantId: string,
   escalationChain: EscalationEntry[],
 ): Promise<Result<{ approved: boolean; maxAffordableAttempt: number }, Error>> {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
 
   const budget = await deps.budgetModel
     .findOne({ tenantId, periodYear: year, periodMonth: month })
-    .select('remaining isFrozen')
-    .exec()
+    .select("remaining isFrozen")
+    .exec();
 
   if (budget === null || budget.isFrozen) {
-    return ok({ approved: false, maxAffordableAttempt: 0 })
+    return ok({ approved: false, maxAffordableAttempt: 0 });
   }
 
-  const remaining = Money.usd(budget.remaining.toString())
-  let maxAffordableAttempt = 0
-  let cumulative = Money.zero()
+  const remaining = Money.usd(budget.remaining.toString());
+  let maxAffordableAttempt = 0;
+  let cumulative = Money.zero();
 
   for (const entry of escalationChain) {
-    cumulative = cumulative.add(Money.usd(entry.maxCostUsd))
+    cumulative = cumulative.add(Money.usd(entry.maxCostUsd));
     if (remaining.gte(cumulative)) {
-      maxAffordableAttempt = entry.attempt
+      maxAffordableAttempt = entry.attempt;
     } else {
-      break
+      break;
     }
   }
 
-  return ok({ approved: maxAffordableAttempt > 0, maxAffordableAttempt })
+  return ok({ approved: maxAffordableAttempt > 0, maxAffordableAttempt });
 }

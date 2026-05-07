@@ -12,14 +12,14 @@ export type {
   HeadAgentOutput,
   WorkerOutput,
   DecompositionStrategy,
-} from './interfaces.js'
+} from "./interfaces.js";
 
 export {
   runParallel,
   runPipeline,
   type OrchestratorOptions,
   type OrchestratorResult,
-} from './orchestrator.js'
+} from "./orchestrator.js";
 
 export {
   installGracefulShutdown,
@@ -29,4 +29,4 @@ export {
   isShuttingDown,
   type ShutdownOptions,
   type CleanupHandler,
-} from './graceful-shutdown.js'
+} from "./graceful-shutdown.js";

@@ -2,7 +2,7 @@
 # Usage: helm upgrade bureau ./deploy/helm/bureau -f deploy/helm/bureau/values-production.yaml
 
 global:
-  imageTag: "1.0.0"  # Pin to specific release tag in production
+  imageTag: "1.0.0" # Pin to specific release tag in production
 
 apiServer:
   replicaCount: 3

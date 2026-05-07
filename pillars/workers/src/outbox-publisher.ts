@@ -13,20 +13,20 @@ import {
   getPendingOutboxEntries,
   markOutboxCompleted,
   markOutboxFailed,
-} from '@bureau/infra-mongo'
-import { enqueueJob } from '@bureau/infra-messaging'
-import { createLogger } from '@bureau/telemetry'
-import type { QUEUE_NAMES } from '@bureau/contracts'
+} from "@bureau/infra-mongo";
+import { enqueueJob } from "@bureau/infra-messaging";
+import { createLogger } from "@bureau/telemetry";
+import type { QUEUE_NAMES } from "@bureau/contracts";
 
-const log = createLogger({ division: 'Executive' })
+const log = createLogger({ division: "Executive" });
 
-type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES]
+type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
-const POLL_INTERVAL_MS = 1000
-const BATCH_SIZE = 50
+const POLL_INTERVAL_MS = 1000;
+const BATCH_SIZE = 50;
 
-let _running = false
-let _timer: ReturnType<typeof setTimeout> | null = null
+let _running = false;
+let _timer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Process one batch of pending outbox entries.
@@ -34,22 +34,22 @@ let _timer: ReturnType<typeof setTimeout> | null = null
  * Failures do NOT stop the batch — other entries proceed.
  */
 async function processBatch(): Promise<void> {
-  const result = await getPendingOutboxEntries(BATCH_SIZE)
+  const result = await getPendingOutboxEntries(BATCH_SIZE);
 
   if (!result.ok) {
-    log.error({ err: result.error.message }, 'Outbox poll query failed')
-    return
+    log.error({ err: result.error.message }, "Outbox poll query failed");
+    return;
   }
 
-  const entries = result.value
-  if (entries.length === 0) return
+  const entries = result.value;
+  if (entries.length === 0) return;
 
-  log.debug({ count: entries.length }, 'Outbox: processing batch')
+  log.debug({ count: entries.length }, "Outbox: processing batch");
 
   await Promise.all(
     entries.map(async (entry) => {
       try {
-        const correlationId = entry.headers['x-correlation-id']
+        const correlationId = entry.headers["x-correlation-id"];
         await enqueueJob(
           entry.targetQueue as QueueName,
           entry.jobName,
@@ -58,55 +58,67 @@ async function processBatch(): Promise<void> {
             jobId: entry.outboxId, // deduplicate via BullMQ jobId
             ...(correlationId !== undefined ? { correlationId } : {}),
           },
-        )
+        );
 
-        const markResult = await markOutboxCompleted(entry.outboxId)
+        const markResult = await markOutboxCompleted(entry.outboxId);
         if (!markResult.ok) {
           log.error(
             { outboxId: entry.outboxId, err: markResult.error.message },
-            'Failed to mark outbox completed',
-          )
+            "Failed to mark outbox completed",
+          );
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        log.warn({ outboxId: entry.outboxId, err: msg, attempts: entry.attempts }, 'Outbox enqueue failed')
+        const msg = e instanceof Error ? e.message : String(e);
+        log.warn(
+          { outboxId: entry.outboxId, err: msg, attempts: entry.attempts },
+          "Outbox enqueue failed",
+        );
 
-        const failResult = await markOutboxFailed(entry.outboxId, entry.attempts)
+        const failResult = await markOutboxFailed(
+          entry.outboxId,
+          entry.attempts,
+        );
         if (!failResult.ok) {
-          log.error({ outboxId: entry.outboxId }, 'Failed to mark outbox failed')
+          log.error(
+            { outboxId: entry.outboxId },
+            "Failed to mark outbox failed",
+          );
         }
       }
     }),
-  )
+  );
 }
 
 /** Start the outbox publisher loop. Idempotent — safe to call multiple times. */
 export function startOutboxPublisher(): void {
-  if (_running) return
-  _running = true
-  log.info({}, 'Outbox publisher started')
+  if (_running) return;
+  _running = true;
+  log.info({}, "Outbox publisher started");
 
   const tick = async () => {
-    if (!_running) return
+    if (!_running) return;
     try {
-      await processBatch()
+      await processBatch();
     } catch (e) {
-      log.error({ err: e instanceof Error ? e.message : String(e) }, 'Outbox publisher tick failed')
+      log.error(
+        { err: e instanceof Error ? e.message : String(e) },
+        "Outbox publisher tick failed",
+      );
     }
     if (_running) {
-      _timer = setTimeout(tick, POLL_INTERVAL_MS)
+      _timer = setTimeout(tick, POLL_INTERVAL_MS);
     }
-  }
+  };
 
-  _timer = setTimeout(tick, POLL_INTERVAL_MS)
+  _timer = setTimeout(tick, POLL_INTERVAL_MS);
 }
 
 /** Stop the outbox publisher loop gracefully. */
 export function stopOutboxPublisher(): void {
-  _running = false
+  _running = false;
   if (_timer !== null) {
-    clearTimeout(_timer)
-    _timer = null
+    clearTimeout(_timer);
+    _timer = null;
   }
-  log.info({}, 'Outbox publisher stopped')
+  log.info({}, "Outbox publisher stopped");
 }

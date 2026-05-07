@@ -7,6 +7,7 @@ We pledge to make participation in Bureau a harassment-free experience for every
 ## Our Standards
 
 **Positive behavior:**
+
 - Using welcoming and inclusive language
 - Being respectful of differing viewpoints and experiences
 - Gracefully accepting constructive criticism
@@ -14,6 +15,7 @@ We pledge to make participation in Bureau a harassment-free experience for every
 - Showing empathy towards other community members
 
 **Unacceptable behavior:**
+
 - Trolling, insulting/derogatory comments, and personal or political attacks
 - Public or private harassment
 - Publishing others' private information without explicit permission

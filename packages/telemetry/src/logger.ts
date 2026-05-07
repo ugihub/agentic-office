@@ -8,49 +8,49 @@
  *
  * Use logger.child() for all agent-specific loggers.
  */
-import pino, { type Logger } from 'pino'
+import pino, { type Logger } from "pino";
 
 /** Standard log context fields — required by observability */
 export interface LogContext {
-  taskId?: string | undefined
-  correlationId?: string | undefined
-  division?: string | undefined
-  agentId?: string | undefined
-  tenantId?: string | undefined
-  workerId?: string | undefined
+  taskId?: string | undefined;
+  correlationId?: string | undefined;
+  division?: string | undefined;
+  agentId?: string | undefined;
+  tenantId?: string | undefined;
+  workerId?: string | undefined;
 }
 
 /** Redacted field values — never logged */
 const REDACTED_PATHS = [
-  'prompt',
-  'output',
-  'finalOutput',
-  '*.prompt',
-  '*.output',
-  'encryptedKey',
-  'keyHash',
-  'password',
-  'apiKey',
-  'token',
-  '*.apiKey',
-  '*.token',
-]
+  "prompt",
+  "output",
+  "finalOutput",
+  "*.prompt",
+  "*.output",
+  "encryptedKey",
+  "keyHash",
+  "password",
+  "apiKey",
+  "token",
+  "*.apiKey",
+  "*.token",
+];
 
 const _base = pino({
-  level: process.env['LOG_LEVEL'] ?? 'info',
+  level: process.env["LOG_LEVEL"] ?? "info",
   redact: {
     paths: REDACTED_PATHS,
-    censor: '[REDACTED]',
+    censor: "[REDACTED]",
   },
   formatters: {
     level(label) {
-      return { level: label }
+      return { level: label };
     },
   },
   timestamp: pino.stdTimeFunctions.isoTime,
   // In development, use pino-pretty via pipe: node app.js | pino-pretty
   // In production: raw JSON for log aggregator
-})
+});
 
 /**
  * Create a child logger with standard Bureau context.
@@ -63,13 +63,13 @@ export function createLogger(ctx: LogContext): Logger {
   // Filter out undefined values to avoid cluttering log entries
   const cleanCtx = Object.fromEntries(
     Object.entries(ctx).filter(([, v]) => v !== undefined),
-  ) as Record<string, string>
+  ) as Record<string, string>;
 
-  return _base.child(cleanCtx)
+  return _base.child(cleanCtx);
 }
 
 /** Root logger — use only for infra-level logging */
-export const rootLogger = _base
+export const rootLogger = _base;
 
 /** Type alias for Pino Logger */
-export type BureauLogger = Logger
+export type BureauLogger = Logger;

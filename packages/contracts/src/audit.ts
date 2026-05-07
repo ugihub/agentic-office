@@ -2,18 +2,23 @@
  * Audit Trail and Agent Execution schemas.
  * Maps to audit_trail and agent_executions MongoDB collections.
  */
-import { z } from 'zod'
+import { z } from "zod";
 import {
   SchemaVersionSchema,
   ISODateSchema,
   DecimalStringSchema,
   DivisionSchema,
   ExecutionPathSchema,
-} from './common.js'
+} from "./common.js";
 
 /** Message type for audit trail */
-export const MessageTypeSchema = z.enum(['Command', 'Event', 'Query', 'Response'])
-export type MessageType = z.infer<typeof MessageTypeSchema>
+export const MessageTypeSchema = z.enum([
+  "Command",
+  "Event",
+  "Query",
+  "Response",
+]);
+export type MessageType = z.infer<typeof MessageTypeSchema>;
 
 /** Audit Trail entry — v1 */
 export const AuditTrailV1Schema = z
@@ -36,10 +41,10 @@ export const AuditTrailV1Schema = z
     payloadHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     payloadSizeBytes: z.number().int().nonnegative(),
 
-    transport: z.literal('BullMQ'),
+    transport: z.literal("BullMQ"),
     queueName: z.string().min(1),
     jobId: z.string().min(1),
-    status: z.enum(['Pending', 'Processing', 'Completed', 'Failed']),
+    status: z.enum(["Pending", "Processing", "Completed", "Failed"]),
     attempts: z.number().int().positive(),
     latencyMs: z.number().int().nonnegative().nullable().default(null),
 
@@ -48,9 +53,9 @@ export const AuditTrailV1Schema = z
 
     updatedAt: ISODateSchema,
   })
-  .strip()
+  .strip();
 
-export type AuditTrailV1 = z.infer<typeof AuditTrailV1Schema>
+export type AuditTrailV1 = z.infer<typeof AuditTrailV1Schema>;
 
 /** Worker execution detail */
 const WorkerExecutionSchema = z
@@ -59,9 +64,14 @@ const WorkerExecutionSchema = z
     jobId: z.string().min(1),
     subTaskRef: z.string().nullable().default(null),
     attemptNumber: z.number().int().nonnegative(),
-    attemptReason: z.enum(['initial', 'stall_requeue', 'qa_escalation', 'user_retry']),
+    attemptReason: z.enum([
+      "initial",
+      "stall_requeue",
+      "qa_escalation",
+      "user_retry",
+    ]),
     llmInvoked: z.boolean(),
-    status: z.enum(['Pending', 'Running', 'Completed', 'Failed', 'Stalled']),
+    status: z.enum(["Pending", "Running", "Completed", "Failed", "Stalled"]),
     startedAt: ISODateSchema,
     endedAt: ISODateSchema.nullable().default(null),
     durationMs: z.number().int().nonnegative().nullable().default(null),
@@ -79,7 +89,7 @@ const WorkerExecutionSchema = z
       .default(null),
     errorMessage: z.string().nullable().default(null),
   })
-  .strip()
+  .strip();
 
 /** Agent Execution — v1 */
 export const AgentExecutionV1Schema = z
@@ -88,7 +98,12 @@ export const AgentExecutionV1Schema = z
     taskId: z.string().min(1),
     division: DivisionSchema,
     headAgentId: z.string().min(1),
-    decompositionStrategy: z.enum(['MapReduce', 'Pipeline', 'Scatter', 'Single']),
+    decompositionStrategy: z.enum([
+      "MapReduce",
+      "Pipeline",
+      "Scatter",
+      "Single",
+    ]),
     executionPath: ExecutionPathSchema,
 
     startedAt: ISODateSchema,
@@ -111,7 +126,7 @@ export const AgentExecutionV1Schema = z
     schemaVersion: SchemaVersionSchema,
     updatedAt: ISODateSchema,
   })
-  .strip()
+  .strip();
 
-export type AgentExecutionV1 = z.infer<typeof AgentExecutionV1Schema>
-export type WorkerExecution = z.infer<typeof WorkerExecutionSchema>
+export type AgentExecutionV1 = z.infer<typeof AgentExecutionV1Schema>;
+export type WorkerExecution = z.infer<typeof WorkerExecutionSchema>;

@@ -49,13 +49,13 @@ spec:
   # Sync windows — prevent deployments during peak hours
   syncWindows:
     - kind: deny
-      schedule: "0 9 * * 1-5"   # Block Mon-Fri 9am UTC
+      schedule: "0 9 * * 1-5" # Block Mon-Fri 9am UTC
       duration: 8h
       applications:
-        - bureau                 # Production only — staging can deploy anytime
-      manualSync: true           # Allow manual override if needed
+        - bureau # Production only — staging can deploy anytime
+      manualSync: true # Allow manual override if needed
     - kind: allow
-      schedule: "0 17 * * 1-5"  # Allow Mon-Fri after 5pm UTC
+      schedule: "0 17 * * 1-5" # Allow Mon-Fri after 5pm UTC
       duration: 6h
       applications:
         - bureau

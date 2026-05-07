@@ -12,21 +12,28 @@
  *
  * @see ADR-001: BullMQ-only (outbox required even with BullMQ)
  */
-import { Schema, model, type Document } from 'mongoose'
-import { type Result, ok, err, tryAsync, newId, EntityPrefix } from '@bureau/shared-kernel'
-import { OutboxPublishError } from '@bureau/shared-kernel'
+import { Schema, model, type Document } from "mongoose";
+import {
+  type Result,
+  ok,
+  err,
+  tryAsync,
+  newId,
+  EntityPrefix,
+} from "@bureau/shared-kernel";
+import { OutboxPublishError } from "@bureau/shared-kernel";
 
 export interface OutboxDocument extends Document {
-  outboxId: string
-  occurredAt: Date
-  processedAt: Date | null
-  status: 'Pending' | 'Completed' | 'Failed'
-  attempts: number
-  nextAttemptAt: Date
-  targetQueue: string
-  jobName: string
-  jobData: Record<string, unknown>
-  headers: Record<string, string>
+  outboxId: string;
+  occurredAt: Date;
+  processedAt: Date | null;
+  status: "Pending" | "Completed" | "Failed";
+  attempts: number;
+  nextAttemptAt: Date;
+  targetQueue: string;
+  jobName: string;
+  jobData: Record<string, unknown>;
+  headers: Record<string, string>;
 }
 
 const outboxSchema = new Schema<OutboxDocument>(
@@ -36,8 +43,8 @@ const outboxSchema = new Schema<OutboxDocument>(
     processedAt: { type: Date, default: null },
     status: {
       type: String,
-      enum: ['Pending', 'Completed', 'Failed'],
-      default: 'Pending',
+      enum: ["Pending", "Completed", "Failed"],
+      default: "Pending",
       required: true,
     },
     attempts: { type: Number, default: 0 },
@@ -50,21 +57,21 @@ const outboxSchema = new Schema<OutboxDocument>(
   {
     strict: true,
     timestamps: { updatedAt: true, createdAt: false },
-    collection: 'outbox',
+    collection: "outbox",
   },
-)
+);
 
 // Compound index for poller query
-outboxSchema.index({ status: 1, nextAttemptAt: 1 })
+outboxSchema.index({ status: 1, nextAttemptAt: 1 });
 
-export const OutboxModel = model<OutboxDocument>('Outbox', outboxSchema)
+export const OutboxModel = model<OutboxDocument>("Outbox", outboxSchema);
 
 export interface OutboxEntry {
-  targetQueue: string
-  jobName: string
-  jobData: Record<string, unknown>
-  correlationId: string
-  traceparent?: string | undefined
+  targetQueue: string;
+  jobName: string;
+  jobData: Record<string, unknown>;
+  correlationId: string;
+  traceparent?: string | undefined;
 }
 
 /**
@@ -75,32 +82,38 @@ export async function createOutboxEntry(
   entry: OutboxEntry,
   session?: Parameters<typeof OutboxModel.prototype.save>[0],
 ): Promise<Result<string, OutboxPublishError>> {
-  const outboxId = newId(EntityPrefix.OUTBOX)
+  const outboxId = newId(EntityPrefix.OUTBOX);
 
   const result = await tryAsync(async () => {
     const doc = new OutboxModel({
       outboxId,
       occurredAt: new Date(),
-      status: 'Pending',
+      status: "Pending",
       attempts: 0,
       nextAttemptAt: new Date(),
       targetQueue: entry.targetQueue,
       jobName: entry.jobName,
       jobData: entry.jobData,
       headers: {
-        'x-correlation-id': entry.correlationId,
-        ...(entry.traceparent !== undefined ? { traceparent: entry.traceparent } : {}),
+        "x-correlation-id": entry.correlationId,
+        ...(entry.traceparent !== undefined
+          ? { traceparent: entry.traceparent }
+          : {}),
       },
-    })
-    await doc.save({ session } as Parameters<typeof doc.save>[0])
-    return outboxId
-  })
+    });
+    await doc.save({ session } as Parameters<typeof doc.save>[0]);
+    return outboxId;
+  });
 
   if (!result.ok) {
-    return err(new OutboxPublishError(outboxId, result.error.message, { cause: result.error }))
+    return err(
+      new OutboxPublishError(outboxId, result.error.message, {
+        cause: result.error,
+      }),
+    );
   }
 
-  return ok(result.value)
+  return ok(result.value);
 }
 
 /**
@@ -112,27 +125,29 @@ export async function getPendingOutboxEntries(
 ): Promise<Result<OutboxDocument[], Error>> {
   return tryAsync(async () =>
     OutboxModel.find({
-      status: 'Pending',
+      status: "Pending",
       nextAttemptAt: { $lte: new Date() },
     })
       .limit(limit)
       .sort({ nextAttemptAt: 1 })
       .exec(),
-  )
+  );
 }
 
 /**
  * Mark an outbox entry as completed.
  * Call after successfully enqueuing to BullMQ.
  */
-export async function markOutboxCompleted(outboxId: string): Promise<Result<void, Error>> {
+export async function markOutboxCompleted(
+  outboxId: string,
+): Promise<Result<void, Error>> {
   const result = await tryAsync(async () => {
     await OutboxModel.updateOne(
       { outboxId },
-      { $set: { status: 'Completed', processedAt: new Date() } },
-    ).exec()
-  })
-  return result
+      { $set: { status: "Completed", processedAt: new Date() } },
+    ).exec();
+  });
+  return result;
 }
 
 /**
@@ -143,16 +158,16 @@ export async function markOutboxFailed(
   outboxId: string,
   attempts: number,
 ): Promise<Result<void, Error>> {
-  const backoffMs = Math.min(Math.pow(2, attempts) * 1000, 300000)
-  const nextAttemptAt = new Date(Date.now() + backoffMs)
+  const backoffMs = Math.min(Math.pow(2, attempts) * 1000, 300000);
+  const nextAttemptAt = new Date(Date.now() + backoffMs);
 
   return tryAsync(async () => {
     await OutboxModel.updateOne(
       { outboxId },
       {
-        $set: { status: attempts >= 5 ? 'Failed' : 'Pending', nextAttemptAt },
+        $set: { status: attempts >= 5 ? "Failed" : "Pending", nextAttemptAt },
         $inc: { attempts: 1 },
       },
-    ).exec()
-  })
+    ).exec();
+  });
 }

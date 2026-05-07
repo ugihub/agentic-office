@@ -10,31 +10,35 @@
  * 6. Start listening
  * 7. SIGTERM → graceful shutdown (drain in-flight, close connections)
  */
-import Fastify from 'fastify'
-import cors from '@fastify/cors'
-import helmet from '@fastify/helmet'
-import rateLimit from '@fastify/rate-limit'
-import mongoose from 'mongoose'
-import { createLogger } from '@bureau/telemetry'
-import { initJwtKeys } from '@bureau/auth'
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
+import mongoose from "mongoose";
+import { createLogger } from "@bureau/telemetry";
+import { initJwtKeys } from "@bureau/auth";
 import {
   installGracefulShutdown,
   registerCleanupHandler,
-} from '@bureau/agents-core'
-import authPlugin from './middleware/auth.js'
-import { healthRoutes } from './routes/health.js'
-import { taskRoutes } from './routes/tasks.js'
-import { authKeyRoutes } from './routes/auth-keys.js'
+} from "@bureau/agents-core";
+import authPlugin from "./middleware/auth.js";
+import { healthRoutes } from "./routes/health.js";
+import { taskRoutes } from "./routes/tasks.js";
+import { authKeyRoutes } from "./routes/auth-keys.js";
 
-const log = createLogger({ division: 'Executive' })
+const log = createLogger({ division: "Executive" });
 
 // ─── Environment ─────────────────────────────────────────────────────────────
 
-const PORT = parseInt(process.env['PORT'] ?? '3001', 10)
-const HOST = process.env['HOST'] ?? '0.0.0.0'
-const MONGO_URI = process.env['MONGO_URI'] ?? 'mongodb://localhost:27017/bureau'
-const RATE_LIMIT_MAX = parseInt(process.env['RATE_LIMIT_MAX'] ?? '100', 10)
-const RATE_LIMIT_WINDOW_MS = parseInt(process.env['RATE_LIMIT_WINDOW_MS'] ?? '60000', 10)
+const PORT = parseInt(process.env["PORT"] ?? "3001", 10);
+const HOST = process.env["HOST"] ?? "0.0.0.0";
+const MONGO_URI =
+  process.env["MONGO_URI"] ?? "mongodb://localhost:27017/bureau";
+const RATE_LIMIT_MAX = parseInt(process.env["RATE_LIMIT_MAX"] ?? "100", 10);
+const RATE_LIMIT_WINDOW_MS = parseInt(
+  process.env["RATE_LIMIT_WINDOW_MS"] ?? "60000",
+  10,
+);
 
 // ─── Build server ─────────────────────────────────────────────────────────────
 
@@ -43,21 +47,28 @@ export async function buildServer() {
     logger: false, // Use Pino from @bureau/telemetry instead
     bodyLimit: 1_048_576, // 1 MB max body
     requestTimeout: 30_000,
-  })
+  });
 
   // CORS — allow configured origins
-  const allowedOrigins = (process.env['CORS_ORIGINS'] ?? '').split(',').filter(Boolean)
+  const allowedOrigins = (process.env["CORS_ORIGINS"] ?? "")
+    .split(",")
+    .filter(Boolean);
   await fastify.register(cors, {
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Api-Key', 'Idempotency-Key'],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Api-Key",
+      "Idempotency-Key",
+    ],
     credentials: true,
-  })
+  });
 
   // Helmet — security headers
   await fastify.register(helmet, {
     contentSecurityPolicy: false, // API server, no HTML
-  })
+  });
 
   // Rate limiting — sliding window via Redis if available, in-memory fallback
   await fastify.register(rateLimit, {
@@ -66,42 +77,47 @@ export async function buildServer() {
     // Exempt health probes from rate limiting
     skipOnError: true,
     keyGenerator: (request) => {
-      const apiKey = request.headers['x-api-key']
-      if (typeof apiKey === 'string') return `apikey:${apiKey.slice(0, 16)}`
-      return request.ip
+      const apiKey = request.headers["x-api-key"];
+      if (typeof apiKey === "string") return `apikey:${apiKey.slice(0, 16)}`;
+      return request.ip;
     },
-  })
+  });
 
   // Auth plugin — populates req.authContext
-  await fastify.register(authPlugin)
+  await fastify.register(authPlugin);
 
   // Routes — health first (no auth required)
-  await fastify.register(healthRoutes)
-  await fastify.register(taskRoutes)
-  await fastify.register(authKeyRoutes)
-  await fastify.register(healthRoutes, { prefix: '/api/v1' })
-  await fastify.register(taskRoutes, { prefix: '/api/v1' })
-  await fastify.register(authKeyRoutes, { prefix: '/api/v1' })
+  await fastify.register(healthRoutes);
+  await fastify.register(taskRoutes);
+  await fastify.register(authKeyRoutes);
+  await fastify.register(healthRoutes, { prefix: "/api/v1" });
+  await fastify.register(taskRoutes, { prefix: "/api/v1" });
+  await fastify.register(authKeyRoutes, { prefix: "/api/v1" });
 
   // Global error handler
   fastify.setErrorHandler((error: Error, request, reply) => {
     // Auth/permission throws are caught here
-    if (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN') {
-      return // Reply already sent by requireAuth/requirePermission
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return; // Reply already sent by requireAuth/requirePermission
     }
     log.error(
       { err: error.message, path: request.url, method: request.method },
-      'Unhandled route error',
-    )
-    void reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'An unexpected error occurred' })
-  })
+      "Unhandled route error",
+    );
+    void reply.status(500).send({
+      error: "INTERNAL_ERROR",
+      message: "An unexpected error occurred",
+    });
+  });
 
   // Not found handler
   fastify.setNotFoundHandler((_request, reply) => {
-    void reply.status(404).send({ error: 'NOT_FOUND', message: 'Route not found' })
-  })
+    void reply
+      .status(404)
+      .send({ error: "NOT_FOUND", message: "Route not found" });
+  });
 
-  return fastify
+  return fastify;
 }
 
 // ─── MongoDB connection ───────────────────────────────────────────────────────
@@ -112,29 +128,37 @@ async function connectMongo(): Promise<void> {
     socketTimeoutMS: 45000,
     maxPoolSize: 20,
     minPoolSize: 2,
-  })
-  log.info({ uri: MONGO_URI.replace(/\/\/.*@/, '//***@') }, 'MongoDB connected')
+  });
+  log.info(
+    { uri: MONGO_URI.replace(/\/\/.*@/, "//***@") },
+    "MongoDB connected",
+  );
 }
 
 // ─── JWT key initialization ───────────────────────────────────────────────────
 
 async function initAuth(): Promise<void> {
-  const privateKeyPem = process.env['JWT_PRIVATE_KEY_PEM'] ?? ''
-  const publicKeyPem = process.env['JWT_PUBLIC_KEY_PEM'] ?? ''
+  const privateKeyPem = process.env["JWT_PRIVATE_KEY_PEM"] ?? "";
+  const publicKeyPem = process.env["JWT_PUBLIC_KEY_PEM"] ?? "";
 
-  if (privateKeyPem === '' || publicKeyPem === '') {
-    if (process.env['NODE_ENV'] === 'production') {
-      throw new Error('JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM required in production')
+  if (privateKeyPem === "" || publicKeyPem === "") {
+    if (process.env["NODE_ENV"] === "production") {
+      throw new Error(
+        "JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM required in production",
+      );
     }
-    log.warn({}, 'JWT keys not configured — auth will fail for JWT tokens (dev mode)')
-    return
+    log.warn(
+      {},
+      "JWT keys not configured — auth will fail for JWT tokens (dev mode)",
+    );
+    return;
   }
 
-  const result = await initJwtKeys(privateKeyPem, publicKeyPem)
+  const result = await initJwtKeys(privateKeyPem, publicKeyPem);
   if (!result.ok) {
-    throw new Error(`JWT key initialization failed: ${result.error.message}`)
+    throw new Error(`JWT key initialization failed: ${result.error.message}`);
   }
-  log.info({}, 'JWT RS256 keys loaded')
+  log.info({}, "JWT RS256 keys loaded");
 }
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
@@ -143,37 +167,38 @@ function setupGracefulShutdown(
   fastify: Awaited<ReturnType<typeof buildServer>>,
 ): void {
   // Register cleanup in shutdown order
-  registerCleanupHandler('fastify', async () => {
-    await fastify.close()
-    log.info({}, 'Fastify closed — all in-flight requests drained')
-  })
-  registerCleanupHandler('mongodb', async () => {
-    await mongoose.disconnect()
-    log.info({}, 'MongoDB disconnected')
-  })
+  registerCleanupHandler("fastify", async () => {
+    await fastify.close();
+    log.info({}, "Fastify closed — all in-flight requests drained");
+  });
+  registerCleanupHandler("mongodb", async () => {
+    await mongoose.disconnect();
+    log.info({}, "MongoDB disconnected");
+  });
 
   installGracefulShutdown({
-    drainTimeoutMs: parseInt(process.env['SHUTDOWN_DRAIN_MS'] ?? '30000', 10),
-    log: (msg: string, meta?: Record<string, unknown>) => log.info(meta ?? {}, msg),
-  })
+    drainTimeoutMs: parseInt(process.env["SHUTDOWN_DRAIN_MS"] ?? "30000", 10),
+    log: (msg: string, meta?: Record<string, unknown>) =>
+      log.info(meta ?? {}, msg),
+  });
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   try {
-    await initAuth()
-    await connectMongo()
+    await initAuth();
+    await connectMongo();
 
-    const server = await buildServer()
-    setupGracefulShutdown(server)
+    const server = await buildServer();
+    setupGracefulShutdown(server);
 
-    await server.listen({ port: PORT, host: HOST })
-    log.info({ port: PORT, host: HOST }, 'Bureau API server listening')
+    await server.listen({ port: PORT, host: HOST });
+    log.info({ port: PORT, host: HOST }, "Bureau API server listening");
   } catch (err) {
-    log.error({ err }, 'Failed to start server')
-    process.exit(1)
+    log.error({ err }, "Failed to start server");
+    process.exit(1);
   }
 }
 
-void main()
+void main();

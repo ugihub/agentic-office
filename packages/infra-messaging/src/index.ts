@@ -10,17 +10,13 @@ export {
   createRedisConnection,
   closeRedisConnection,
   type RedisConnectionOptions,
-} from './redis.js'
+} from "./redis.js";
 
-export {
-  getQueue,
-  enqueueJob,
-  closeAllQueues,
-} from './queues.js'
+export { getQueue, enqueueJob, closeAllQueues } from "./queues.js";
 
 export {
   createWorker,
   getAttemptReason,
   BUREAU_WORKER_OPTIONS,
   type BureauWorkerOptions,
-} from './worker.js'
+} from "./worker.js";

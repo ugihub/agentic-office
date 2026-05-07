@@ -5,83 +5,91 @@
  * CRITICAL: optimistic concurrency via stageVersion field.
  * Finance atomic reservation uses findOneAndUpdate + $gte (not here, in budget model).
  */
-import { Schema, Types, model, type Document } from 'mongoose'
-import type { TaskStage, ExecutionPath } from '@bureau/contracts'
+import { Schema, Types, model, type Document } from "mongoose";
+import type { TaskStage, ExecutionPath } from "@bureau/contracts";
 
 export interface TaskEnvelopeDocument extends Document {
-  taskId: string
-  tenantId: string
-  userId: string
-  submittedAt: Date
-  completedAt: Date | null
-  currentStage: TaskStage
-  stageVersion: number
-  executionPath: ExecutionPath
+  taskId: string;
+  tenantId: string;
+  userId: string;
+  submittedAt: Date;
+  completedAt: Date | null;
+  currentStage: TaskStage;
+  stageVersion: number;
+  executionPath: ExecutionPath;
   originalRequest: {
-    prompt: string
+    prompt: string;
     constraints: {
-      maxCostUsd: Types.Decimal128
-      maxLatencyMs: number
-      preferredModelTier: 'economy' | 'standard' | 'premium'
-    }
-    outputFormat: 'markdown' | 'json' | 'text' | 'html'
-    metadata: Record<string, unknown>
-  }
+      maxCostUsd: Types.Decimal128;
+      maxLatencyMs: number;
+      preferredModelTier: "economy" | "standard" | "premium";
+    };
+    outputFormat: "markdown" | "json" | "text" | "html";
+    metadata: Record<string, unknown>;
+  };
   routing: {
-    selectedModel: string
+    selectedModel: string;
     escalationChain: Array<{
-      attempt: number
-      model: string
-      maxCostUsd: Types.Decimal128
-    }>
-    complexityScore: number
-    pathType: ExecutionPath
-    rationale: string
-    decidedBy: string
-    decidedAt: Date
-  } | null
+      attempt: number;
+      model: string;
+      maxCostUsd: Types.Decimal128;
+    }>;
+    complexityScore: number;
+    pathType: ExecutionPath;
+    rationale: string;
+    decidedBy: string;
+    decidedAt: Date;
+  } | null;
   budget: {
-    maxCostUsd: Types.Decimal128
-    reservedUsd: Types.Decimal128
+    maxCostUsd: Types.Decimal128;
+    reservedUsd: Types.Decimal128;
     consumed: {
-      tokensIn: number
-      tokensOut: number
-      costUsd: Types.Decimal128
-    }
+      tokensIn: number;
+      tokensOut: number;
+      costUsd: Types.Decimal128;
+    };
     reservations: Array<{
-      taskId: string
-      amount: Types.Decimal128
-      reservedAt: Date
-    }>
-  }
+      taskId: string;
+      amount: Types.Decimal128;
+      reservedAt: Date;
+    }>;
+  };
   pendingDecision: {
-    reason: 'budget_insufficient_for_escalation'
-    attemptNumber: number
-    bestEffortOutput: { available: boolean; qualityEstimate: number }
-    escalationOption: { targetModel: string; additionalCostUsd: Types.Decimal128; available: boolean }
-    expiresAt: Date
-    defaultAction: 'best_effort' | 'add_budget' | 'cancel'
-    notifiedAt: Date | null
-  } | null
+    reason: "budget_insufficient_for_escalation";
+    attemptNumber: number;
+    bestEffortOutput: { available: boolean; qualityEstimate: number };
+    escalationOption: {
+      targetModel: string;
+      additionalCostUsd: Types.Decimal128;
+      available: boolean;
+    };
+    expiresAt: Date;
+    defaultAction: "best_effort" | "add_budget" | "cancel";
+    notifiedAt: Date | null;
+  } | null;
   intermediateOutputs: {
-    research: { summary: string; sources: string[]; confidence: number } | null
-    production: { draft: string; version: number; attemptNumber: number } | null
-    qa: unknown | null
-  }
-  finalOutput: string | null
-  outputQuality: 'best_effort' | 'standard' | null
+    research: { summary: string; sources: string[]; confidence: number } | null;
+    production: {
+      draft: string;
+      version: number;
+      attemptNumber: number;
+    } | null;
+    qa: unknown | null;
+  };
+  finalOutput: string | null;
+  outputQuality: "best_effort" | "standard" | null;
   stateTransitions: Array<{
-    from: TaskStage
-    to: TaskStage
-    at: Date
-    byAgent: string
-    correlationId: string
-  }>
-  retryCount: { production: number; qa: number }
-  cancellationRequested: boolean
-  idempotencyKey: string | null
-  schemaVersion: 'v1'
-  updatedAt: Date
+    from: TaskStage;
+    to: TaskStage;
+    at: Date;
+    byAgent: string;
+    correlationId: string;
+  }>;
+  retryCount: { production: number; qa: number };
+  cancellationRequested: boolean;
+  idempotencyKey: string | null;
+  schemaVersion: "v1";
+  updatedAt: Date;
 }
 
 const escalationEntrySchema = new Schema(
@@ -91,7 +99,7 @@ const escalationEntrySchema = new Schema(
     maxCostUsd: { type: Schema.Types.Decimal128, required: true },
   },
   { _id: false },
-)
+);
 
 const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
   {
@@ -104,14 +112,25 @@ const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
       type: String,
       required: true,
       enum: [
-        'Submitted', 'Preparing', 'Researching', 'Producing',
-        'Reviewing', 'Formatting', 'AwaitingUserDecision',
-        'Completed', 'Failed', 'Cancelled',
+        "Submitted",
+        "Preparing",
+        "Researching",
+        "Producing",
+        "Reviewing",
+        "Formatting",
+        "AwaitingUserDecision",
+        "Completed",
+        "Failed",
+        "Cancelled",
       ],
-      default: 'Submitted',
+      default: "Submitted",
     },
     stageVersion: { type: Number, required: true, default: 0 },
-    executionPath: { type: String, required: true, enum: ['fast', 'standard', 'full'] },
+    executionPath: {
+      type: String,
+      required: true,
+      enum: ["fast", "standard", "full"],
+    },
     originalRequest: {
       prompt: { type: String, required: true },
       constraints: {
@@ -119,14 +138,14 @@ const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
         maxLatencyMs: { type: Number, required: true, default: 30000 },
         preferredModelTier: {
           type: String,
-          enum: ['economy', 'standard', 'premium'],
-          default: 'standard',
+          enum: ["economy", "standard", "premium"],
+          default: "standard",
         },
       },
       outputFormat: {
         type: String,
-        enum: ['markdown', 'json', 'text', 'html'],
-        default: 'markdown',
+        enum: ["markdown", "json", "text", "html"],
+        default: "markdown",
       },
       metadata: { type: Schema.Types.Mixed, default: {} },
     },
@@ -144,11 +163,17 @@ const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
     },
     budget: {
       maxCostUsd: { type: Schema.Types.Decimal128, required: true },
-      reservedUsd: { type: Schema.Types.Decimal128, default: new Types.Decimal128('0') },
+      reservedUsd: {
+        type: Schema.Types.Decimal128,
+        default: new Types.Decimal128("0"),
+      },
       consumed: {
         tokensIn: { type: Number, default: 0 },
         tokensOut: { type: Number, default: 0 },
-        costUsd: { type: Schema.Types.Decimal128, default: new Types.Decimal128('0') },
+        costUsd: {
+          type: Schema.Types.Decimal128,
+          default: new Types.Decimal128("0"),
+        },
       },
       reservations: [
         {
@@ -166,7 +191,11 @@ const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
       qa: { type: Schema.Types.Mixed, default: null },
     },
     finalOutput: { type: String, default: null },
-    outputQuality: { type: String, enum: ['best_effort', 'standard', null], default: null },
+    outputQuality: {
+      type: String,
+      enum: ["best_effort", "standard", null],
+      default: null,
+    },
     stateTransitions: [
       {
         from: String,
@@ -183,19 +212,25 @@ const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
     },
     cancellationRequested: { type: Boolean, default: false },
     idempotencyKey: { type: String, default: null, sparse: true, index: true },
-    schemaVersion: { type: String, required: true, default: 'v1' },
+    schemaVersion: { type: String, required: true, default: "v1" },
   },
   {
     strict: true,
     timestamps: { updatedAt: true, createdAt: false },
-    collection: 'task_envelopes',
+    collection: "task_envelopes",
   },
-)
+);
 
 // Compound indexes
-taskEnvelopeSchema.index({ tenantId: 1, submittedAt: -1 })
-taskEnvelopeSchema.index({ currentStage: 1 })
-taskEnvelopeSchema.index({ 'pendingDecision.expiresAt': 1 }, { sparse: true })
-taskEnvelopeSchema.index({ idempotencyKey: 1, tenantId: 1 }, { unique: true, sparse: true })
+taskEnvelopeSchema.index({ tenantId: 1, submittedAt: -1 });
+taskEnvelopeSchema.index({ currentStage: 1 });
+taskEnvelopeSchema.index({ "pendingDecision.expiresAt": 1 }, { sparse: true });
+taskEnvelopeSchema.index(
+  { idempotencyKey: 1, tenantId: 1 },
+  { unique: true, sparse: true },
+);
 
-export const TaskEnvelopeModel = model<TaskEnvelopeDocument>('TaskEnvelope', taskEnvelopeSchema)
+export const TaskEnvelopeModel = model<TaskEnvelopeDocument>(
+  "TaskEnvelope",
+  taskEnvelopeSchema,
+);

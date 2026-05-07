@@ -23,9 +23,9 @@
  *     }
  *   }
  */
-import { startMcpServer } from './index.js'
+import { startMcpServer } from "./index.js";
 
 startMcpServer().catch((err: unknown) => {
-  process.stderr.write(`Bureau MCP server fatal error: ${String(err)}\n`)
-  process.exit(1)
-})
+  process.stderr.write(`Bureau MCP server fatal error: ${String(err)}\n`);
+  process.exit(1);
+});

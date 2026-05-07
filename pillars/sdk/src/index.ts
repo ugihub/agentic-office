@@ -21,8 +21,8 @@
  * }
  * ```
  */
-export { BureauClient, BureauError } from './client.js'
-export { streamSSE, parseSSEEvent } from './streaming.js'
+export { BureauClient, BureauError } from "./client.js";
+export { streamSSE, parseSSEEvent } from "./streaming.js";
 export type {
   BureauClientOptions,
   SubmitTaskOptions,
@@ -42,4 +42,4 @@ export type {
   DecisionRequiredEvent,
   TaskCompletedEvent,
   TaskFailedEvent,
-} from './types.js'
+} from "./types.js";
