@@ -2,7 +2,7 @@
 # Target: < 150MB final image, non-root, read-only filesystem
 
 # ─── Stage 1: Base with pnpm ──────────────────────────────────────────────────
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 

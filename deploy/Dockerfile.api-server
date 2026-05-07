@@ -3,7 +3,7 @@
 # Base: gcr.io/distroless/nodejs20-debian12 (no shell, no package manager, minimal attack surface)
 
 # ─── Stage 1: Install pnpm + resolve dependencies ────────────────────────────
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
