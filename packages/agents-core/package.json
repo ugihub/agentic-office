@@ -23,7 +23,7 @@
     "@bureau/shared-kernel": "workspace:*",
     "@bureau/contracts": "workspace:*",
     "@bureau/telemetry": "workspace:*",
-    "p-limit": "^6.1.0"
+    "p-limit": "^7.3.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
