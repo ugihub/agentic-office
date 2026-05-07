@@ -35,10 +35,14 @@ export function ConnectionTab({ settings, onSave }: ConnectionTabProps) {
   return (
     <form onSubmit={handleSave} className="space-y-5 max-w-lg">
       <div>
-        <label className="block text-sm font-medium text-secondary mb-1">
+        <label
+          htmlFor="conn-api-url"
+          className="block text-sm font-medium text-secondary mb-1"
+        >
           API Server URL
         </label>
         <input
+          id="conn-api-url"
           type="url"
           value={form.apiUrl}
           onChange={(e) => setForm({ ...form, apiUrl: e.target.value })}
@@ -47,10 +51,14 @@ export function ConnectionTab({ settings, onSave }: ConnectionTabProps) {
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-secondary mb-1">
+        <label
+          htmlFor="conn-api-key"
+          className="block text-sm font-medium text-secondary mb-1"
+        >
           API Key
         </label>
         <input
+          id="conn-api-key"
           type="password"
           value={form.apiKey}
           onChange={(e) => setForm({ ...form, apiKey: e.target.value })}

@@ -42,10 +42,14 @@ export function TaskForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
       <div>
-        <label className="block text-sm font-medium text-secondary mb-2">
+        <label
+          htmlFor="task-prompt"
+          className="block text-sm font-medium text-secondary mb-2"
+        >
           Task Prompt <span className="text-danger">*</span>
         </label>
         <textarea
+          id="task-prompt"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={6}
@@ -58,10 +62,14 @@ export function TaskForm() {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-secondary mb-1">
+          <label
+            htmlFor="task-budget"
+            className="block text-sm font-medium text-secondary mb-1"
+          >
             Max Budget (USD, optional)
           </label>
           <input
+            id="task-budget"
             type="number"
             step="0.01"
             min="0"
@@ -72,10 +80,14 @@ export function TaskForm() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-secondary mb-1">
+          <label
+            htmlFor="task-tier"
+            className="block text-sm font-medium text-secondary mb-1"
+          >
             Model Tier
           </label>
           <select
+            id="task-tier"
             value={tier}
             onChange={(e) =>
               setTier(e.target.value as "economy" | "standard" | "premium")

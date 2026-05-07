@@ -24,7 +24,10 @@ export function StageOverlay({ currentStage }: StageOverlayProps) {
   const [displayStage, setDisplayStage] = useState<TaskStage | null>(null);
 
   useEffect(() => {
-    if (currentStage === null) return;
+    if (currentStage === null) {
+      prevStageRef.current = null;
+      return;
+    }
 
     // Only trigger on changes, not initial mount
     if (

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { createBureauClient } from "@/lib/bureau-client";
 import type { ApiKey, CreateApiKeyResult } from "@bureau/sdk";
@@ -50,6 +50,13 @@ export function ApiKeysTab() {
   // Plaintext modal
   const [newKey, setNewKey] = useState<CreateApiKeyResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   // Revoke state
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -92,9 +99,14 @@ export function ApiKeysTab() {
   }
 
   async function handleCopy(text: string) {
-    await navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // clipboard API unavailable in non-secure contexts
+    }
     setCopied(true);
-    setTimeout(() => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => {
       setCopied(false);
       setNewKey(null);
     }, 1500);
@@ -171,10 +183,14 @@ export function ApiKeysTab() {
           className="rounded-xl border border-border bg-raised p-4 space-y-4"
         >
           <div>
-            <label className="block text-xs font-medium text-secondary mb-1">
+            <label
+              htmlFor="key-name"
+              className="block text-xs font-medium text-secondary mb-1"
+            >
               Key Name <span className="text-danger">*</span>
             </label>
             <input
+              id="key-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. production-app"
@@ -204,10 +220,14 @@ export function ApiKeysTab() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-secondary mb-1">
+            <label
+              htmlFor="key-expires"
+              className="block text-xs font-medium text-secondary mb-1"
+            >
               Expires In Days (optional)
             </label>
             <input
+              id="key-expires"
               type="number"
               min="1"
               max="365"
