@@ -46,6 +46,9 @@ redis-data/
 grafana-data/
 prometheus-data/
 
+# Secrets — never commit private keys
+secrets/
+
 # Doppler
 .doppler/
 
