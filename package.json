@@ -34,7 +34,9 @@
   "pnpm": {
     "overrides": {
       "react": "19.2.5",
-      "react-dom": "19.2.5"
+      "react-dom": "19.2.5",
+      "resend>react-dom": "19.2.5",
+      "@react-email/render>react-dom": "19.2.5"
     }
   }
 }

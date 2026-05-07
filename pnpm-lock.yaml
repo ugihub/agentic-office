@@ -7,6 +7,8 @@ settings:
 overrides:
   react: 19.2.5
   react-dom: 19.2.5
+  resend>react-dom: 19.2.5
+  '@react-email/render>react-dom': 19.2.5
 
 importers:
 
@@ -568,9 +570,15 @@ importers:
       p-limit:
         specifier: ^5.0.0
         version: 5.0.0
+      react:
+        specifier: 19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: 19.2.5
+        version: 19.2.5(react@19.2.5)
       resend:
         specifier: ^3.0.0
-        version: 3.5.0(react-dom@19.2.6(react@19.2.5))(react@19.2.5)
+        version: 3.5.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -3589,11 +3597,6 @@ packages:
     peerDependencies:
       react: 19.2.5
 
-  react-dom@19.2.6:
-    resolution: {integrity: sha512-0prMI+hvBbPjsWnxDLxlCGyM8PN6UuWjEUCYmZhO67xIV9Xasa/r/vDnq+Xyq4Lo27g8QSbO5YzARu0D1Sps3g==}
-    peerDependencies:
-      react: 19.2.5
-
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
@@ -5080,12 +5083,12 @@ snapshots:
 
   '@protobufjs/utf8@1.1.1': {}
 
-  '@react-email/render@0.0.16(react-dom@19.2.6(react@19.2.5))(react@19.2.5)':
+  '@react-email/render@0.0.16(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       html-to-text: 9.0.5
       js-beautify: 1.15.4
       react: 19.2.5
-      react-dom: 19.2.6(react@19.2.5)
+      react-dom: 19.2.5(react@19.2.5)
       react-promise-suspense: 0.3.4
 
   '@rollup/rollup-android-arm-eabi@4.60.3':
@@ -7256,11 +7259,6 @@ snapshots:
       react: 19.2.5
       scheduler: 0.27.0
 
-  react-dom@19.2.6(react@19.2.5):
-    dependencies:
-      react: 19.2.5
-      scheduler: 0.27.0
-
   react-is@18.3.1: {}
 
   react-markdown@9.1.0(@types/react@19.2.14)(react@19.2.5):
@@ -7332,9 +7330,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  resend@3.5.0(react-dom@19.2.6(react@19.2.5))(react@19.2.5):
+  resend@3.5.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
-      '@react-email/render': 0.0.16(react-dom@19.2.6(react@19.2.5))(react@19.2.5)
+      '@react-email/render': 0.0.16(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
     transitivePeerDependencies:
       - react
       - react-dom

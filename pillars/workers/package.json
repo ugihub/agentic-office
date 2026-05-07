@@ -23,6 +23,8 @@
     "@bureau/llm-providers": "workspace:*",
     "@bureau/cost-analytics": "workspace:*",
     "mongoose": "^8.0.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
     "resend": "^3.0.0",
     "p-limit": "^5.0.0"
   },
