@@ -25,7 +25,7 @@
     "@bureau/cost-analytics": "workspace:*",
     "@bureau/core": "workspace:*",
     "@bureau/task-machine": "workspace:*",
-    "@upstash/ratelimit": "^1.0.0",
+    "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.0.0",
     "mongoose": "^8.0.0",
     "fastify": "^5.0.0",
