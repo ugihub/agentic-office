@@ -125,7 +125,7 @@ jobs:
 
       - name: Extract metadata for Docker
         id: meta-api
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/bureau-id/bureau-api-server
           tags: |
@@ -148,7 +148,7 @@ jobs:
 
       - name: Extract metadata for Workers image
         id: meta-workers
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/bureau-id/bureau-workers
           tags: |
