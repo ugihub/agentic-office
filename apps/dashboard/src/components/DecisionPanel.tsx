@@ -35,27 +35,27 @@ export function DecisionPanel({ taskId: _taskId, decision, onSubmit }: Props) {
   const seconds = secondsLeft % 60;
 
   return (
-    <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-6 space-y-4">
+    <div className="rounded-xl border-2 border-warning/50 bg-warning/5 p-6 space-y-4">
       <div className="flex items-start justify-between">
         <div className="flex-1 mr-4">
-          <h3 className="text-lg font-bold text-amber-900">
+          <h3 className="text-lg font-bold text-yellow-300">
             ⚠ Decision Required
           </h3>
-          <p className="mt-1 text-sm text-amber-800">{decision.reason}</p>
+          <p className="mt-1 text-sm text-secondary">{decision.reason}</p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-xs text-amber-600">Expires in</p>
-          <p className="text-2xl font-mono font-bold text-amber-800">
+          <p className="text-xs text-muted">Expires in</p>
+          <p className="text-2xl font-mono font-bold text-yellow-300">
             {minutes}:{String(seconds).padStart(2, "0")}
           </p>
         </div>
       </div>
 
       {decision.bestEffortOutput?.available === true && (
-        <div className="rounded-lg bg-white border border-amber-200 p-3">
-          <p className="text-xs font-medium text-gray-500">
+        <div className="rounded-lg bg-raised border border-border p-3">
+          <p className="text-xs text-secondary">
             Best-effort quality estimate:{" "}
-            <span className="font-bold text-amber-700">
+            <span className="font-bold text-primary">
               {Math.round(
                 (decision.bestEffortOutput.qualityEstimate ?? 0) * 100,
               )}
@@ -66,14 +66,14 @@ export function DecisionPanel({ taskId: _taskId, decision, onSubmit }: Props) {
       )}
 
       {decision.escalationOption?.available === true && (
-        <div className="rounded-lg bg-white border border-amber-200 p-3">
-          <p className="text-xs text-gray-500">
+        <div className="rounded-lg bg-raised border border-border p-3">
+          <p className="text-xs text-secondary">
             Escalate to{" "}
-            <span className="font-medium">
+            <span className="font-medium text-primary">
               {decision.escalationOption.targetModel}
             </span>{" "}
             — additional cost:{" "}
-            <span className="font-bold text-gray-800">
+            <span className="font-bold text-yellow-300">
               ${decision.escalationOption.additionalCostUsd}
             </span>
           </p>
@@ -84,21 +84,21 @@ export function DecisionPanel({ taskId: _taskId, decision, onSubmit }: Props) {
         <button
           onClick={() => handleAction("add_budget")}
           disabled={submitting !== null}
-          className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
         >
           {submitting === "add_budget" ? "Approving…" : "Approve & Escalate"}
         </button>
         <button
           onClick={() => handleAction("best_effort")}
           disabled={submitting !== null}
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium text-secondary hover:text-primary hover:bg-raised disabled:opacity-50"
         >
           {submitting === "best_effort" ? "Accepting…" : "Use Best Effort"}
         </button>
         <button
           onClick={() => handleAction("cancel")}
           disabled={submitting !== null}
-          className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          className="rounded-lg border border-danger/40 px-4 py-2 text-sm font-medium text-red-400 hover:bg-danger/10 disabled:opacity-50"
         >
           {submitting === "cancel" ? "Cancelling…" : "Cancel"}
         </button>

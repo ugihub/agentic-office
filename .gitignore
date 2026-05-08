@@ -56,3 +56,10 @@ secrets/
 tests/security/results/*.json
 tests/security/results/*.txt
 tests/load/results/
+
+# Internal planning & brainstorming docs
+docs/superpowers/
+implementation_plan*.md
+
+# Claude Code internal
+.claude/

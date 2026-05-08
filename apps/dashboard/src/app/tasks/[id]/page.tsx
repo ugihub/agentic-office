@@ -6,8 +6,10 @@ import { useTaskStream } from "@/hooks/useTaskStream";
 import { StageProgress } from "@/components/StageProgress";
 import { DivisionCards } from "@/components/DivisionCards";
 import { DecisionPanel } from "@/components/DecisionPanel";
-import { EventLog } from "@/components/EventLog";
+import { TerminalLog } from "@/components/TerminalLog";
 import { StageBadge } from "@/components/StageBadge";
+import { StageOverlay } from "@/components/StageOverlay";
+import { AgentThinkingDots } from "@/components/AgentThinkingDots";
 import type { TaskEnvelope, DecisionAction } from "@bureau/sdk";
 
 export default function TaskDetailPage({
@@ -49,89 +51,107 @@ export default function TaskDetailPage({
 
   if (loadError) {
     return (
-      <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-        <p className="text-sm text-red-600">Error: {loadError}</p>
+      <div className="rounded-lg bg-danger/10 border border-danger/30 p-4">
+        <p className="text-sm text-red-400">Error: {loadError}</p>
       </div>
     );
   }
 
   if (!task) {
-    return <div className="text-center py-12 text-gray-400">Loading…</div>;
+    return <div className="text-center py-12 text-secondary">Loading…</div>;
   }
 
   const isRunning = !stream.done && streaming;
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Task Detail</h1>
-          <p className="text-xs font-mono text-gray-400 mt-0.5">{taskId}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {currentStage && <StageBadge stage={currentStage} />}
-          {isRunning && (
-            <button
-              onClick={handleCancel}
-              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </div>
+    <>
+      <StageOverlay currentStage={currentStage} />
 
-      {currentStage && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Progress</h2>
-          <StageProgress current={currentStage} />
-        </div>
-      )}
-
-      {currentStage === "AwaitingUserDecision" && stream.pendingDecision && (
-        <DecisionPanel
-          taskId={taskId}
-          decision={stream.pendingDecision}
-          onSubmit={handleDecision}
-        />
-      )}
-
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">
-          Agent Divisions
-          {isRunning && (
-            <span className="ml-2 text-xs font-normal text-brand-500">
-              ● live
-            </span>
-          )}
-        </h2>
-        <DivisionCards
-          activeDivision={stream.activeDivision}
-          divisionMessages={stream.divisionMessages}
-        />
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Event Log</h2>
-        <EventLog events={stream.events} />
-      </div>
-
-      {finalOutput && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-6">
-          <h2 className="text-sm font-semibold text-green-800 mb-3">
-            ✓ Final Output
-          </h2>
-          <div className="prose prose-sm max-w-none text-gray-800">
-            <ReactMarkdown>{finalOutput}</ReactMarkdown>
+      <div className="space-y-6 max-w-4xl">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-primary">Task Detail</h1>
+            <p className="text-xs font-mono text-muted mt-0.5">{taskId}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {currentStage && <StageBadge stage={currentStage} />}
+            {isRunning && (
+              <button
+                onClick={handleCancel}
+                className="rounded-lg border border-danger/40 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-danger/10"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
-      )}
 
-      {stream.error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-600">✗ {stream.error}</p>
+        {/* Agent thinking indicator */}
+        {isRunning && stream.activeDivision !== null && <AgentThinkingDots />}
+
+        {/* Stage progress */}
+        {currentStage && (
+          <div className="rounded-xl border border-border bg-surface p-6">
+            <h2 className="text-sm font-semibold text-secondary mb-4">
+              Progress
+            </h2>
+            <StageProgress current={currentStage} />
+          </div>
+        )}
+
+        {/* Decision panel */}
+        {currentStage === "AwaitingUserDecision" && stream.pendingDecision && (
+          <DecisionPanel
+            taskId={taskId}
+            decision={stream.pendingDecision}
+            onSubmit={handleDecision}
+          />
+        )}
+
+        {/* Division cards */}
+        <div className="rounded-xl border border-border bg-surface p-6">
+          <h2 className="text-sm font-semibold text-secondary mb-4">
+            Agent Divisions
+            {isRunning && (
+              <span className="ml-2 text-xs font-normal text-brand-400">
+                ● live
+              </span>
+            )}
+          </h2>
+          <DivisionCards
+            activeDivision={stream.activeDivision}
+            divisionMessages={stream.divisionMessages}
+          />
         </div>
-      )}
-    </div>
+
+        {/* Terminal log */}
+        <div className="rounded-xl border border-border bg-surface p-6">
+          <h2 className="text-sm font-semibold text-secondary mb-3">
+            System Log
+          </h2>
+          <TerminalLog events={stream.events} isStreaming={isRunning} />
+        </div>
+
+        {/* Final output */}
+        {finalOutput && (
+          <div className="rounded-xl border border-success/30 bg-success/5 p-6">
+            <h2 className="text-sm font-semibold text-green-300 mb-3">
+              ✓ Final Output
+            </h2>
+            <div className="prose prose-sm prose-invert max-w-none text-primary/80">
+              <ReactMarkdown>{finalOutput}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {stream.error && (
+          <div className="rounded-xl border border-danger/30 bg-danger/5 p-4">
+            <p className="text-sm text-red-400">✗ {stream.error}</p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
