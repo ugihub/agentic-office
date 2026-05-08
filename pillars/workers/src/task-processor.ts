@@ -910,44 +910,12 @@ async function processTask(job: {
   );
 
   // ── 13. Release unused budget ─────────────────────────────────────────────────
-  // Fire-and-forget — non-blocking, non-fatal
-  const costSummary = await getTaskCostSummary(taskId);
-  const actualCostUsd = costSummary.ok
-    ? costSummary.value.totalCostUsd
-    : escalationChain.totalMaxCostUsd;
-
-  if (costSummary.ok) {
-    await TaskEnvelopeModel.updateOne(
-      { taskId, tenantId },
-      {
-        $set: {
-          "budget.consumed.tokensIn": costSummary.value.totalTokensIn,
-          "budget.consumed.tokensOut": costSummary.value.totalTokensOut,
-          "budget.consumed.costUsd": costSummary.value.totalCostUsd,
-        },
-      },
-    ).exec();
-  } else {
-    jobLog.error(
-      { err: costSummary.error.message },
-      "Cost summary unavailable; keeping full reservation consumed",
-    );
-  }
-
-  const releaseResult = await releaseBudget(
-    { budgetModel: BudgetModel },
+  await releaseUnusedBudgetAfterCostSummary({
     taskId,
     tenantId,
-    actualCostUsd,
-    escalationChain.totalMaxCostUsd,
-  );
-
-  if (!releaseResult.ok) {
-    jobLog.error(
-      { err: releaseResult.error.message },
-      "Failed to release unused budget",
-    );
-  }
+    reservedCostUsd: escalationChain.totalMaxCostUsd,
+    log: jobLog,
+  });
 }
 
 // ─── Worker registration ─────────────────────────────────────────────────────
