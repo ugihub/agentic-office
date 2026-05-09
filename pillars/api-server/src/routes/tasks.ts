@@ -179,15 +179,38 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
       const filter: Record<string, unknown> = { tenantId: auth.tenantId };
       if (query.stage) filter["currentStage"] = query.stage;
 
-      const tasks = await TaskEnvelopeModel.find(filter)
+      const rawTasks = await TaskEnvelopeModel.find(filter)
         .select(
-          "taskId currentStage executionPath submittedAt completedAt outputQuality",
+          "taskId tenantId currentStage executionPath submittedAt completedAt updatedAt outputQuality pendingDecision budget.consumed.costUsd originalRequest.prompt",
         )
         .sort({ submittedAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean()
         .exec();
+
+      const tasks = rawTasks.map((t) => {
+        const budget = t.budget as
+          | { consumed: { costUsd: { toString(): string } } }
+          | undefined;
+        const req = t.originalRequest as { prompt?: string } | undefined;
+        return {
+          taskId: t.taskId,
+          tenantId: t.tenantId,
+          currentStage: t.currentStage,
+          executionPath: t.executionPath,
+          submittedAt: t.submittedAt,
+          createdAt: t.submittedAt, // alias — SDK TaskEnvelope uses createdAt
+          updatedAt: t.updatedAt,
+          completedAt: t.completedAt,
+          outputQuality: t.outputQuality ?? null,
+          pendingDecision:
+            (t.pendingDecision as unknown as Record<string, unknown> | null) ??
+            null,
+          promptPreview: req?.prompt?.slice(0, 60) ?? null,
+          costUsd: budget?.consumed.costUsd?.toString() ?? null,
+        };
+      });
 
       return reply.send({ tasks, limit, skip });
     },
