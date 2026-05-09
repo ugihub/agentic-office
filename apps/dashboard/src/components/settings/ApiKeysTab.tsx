@@ -119,25 +119,40 @@ export function ApiKeysTab() {
     );
   }
 
-  function listErrorMessage(): string {
-    if (!error) return "";
+  function listErrorBanner(): React.ReactNode {
+    if (!error) return null;
+    let msg: string;
+    let hint: string | null = null;
     if (error instanceof BureauError) {
-      if (error.status === 401)
-        return "No API key configured. Set one in the Connection tab first.";
-      if (error.status === 403)
-        return "Current key lacks keys:read permission.";
+      if (error.status === 401) {
+        msg = "No API key configured — go to the Connection tab and enter one.";
+        hint =
+          "First-time setup: set BUREAU_SUPER_KEY in your .env, enter it as your API Key in Connection, then create a scoped key here.";
+      } else if (error.status === 403) {
+        msg =
+          "Current key lacks keys:read permission — creating keys also requires keys:write.";
+        hint =
+          "Use BUREAU_SUPER_KEY (see .env.example) or a key with keys:read + keys:write.";
+      } else {
+        msg = "Cannot reach the API — check Connection tab.";
+      }
+    } else {
+      msg = "Cannot reach the API — check Connection tab.";
     }
-    return "Cannot reach the API — check Connection tab.";
+    return (
+      <div className="rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3 space-y-1">
+        <div className="flex items-start gap-2">
+          <span className="text-red-400 mt-0.5 text-sm">⚠</span>
+          <p className="text-sm text-red-400">{msg}</p>
+        </div>
+        {hint && <p className="text-xs text-red-500/70 pl-5">{hint}</p>}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6 max-w-2xl">
-      {error && (
-        <div className="rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
-          <span className="text-red-400 mt-0.5 text-sm">⚠</span>
-          <p className="text-sm text-red-400">{listErrorMessage()}</p>
-        </div>
-      )}
+      {listErrorBanner()}
       {/* Plaintext modal */}
       {newKey !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
