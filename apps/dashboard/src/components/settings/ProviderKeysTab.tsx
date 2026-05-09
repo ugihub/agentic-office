@@ -1,6 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import useSWR from "swr";
+import { useState } from "react";
 import { createBureauClient } from "@/lib/bureau-client";
+import type { ProviderKeyStatus } from "@bureau/sdk";
 
 type Provider =
   | "anthropic"
@@ -31,44 +33,28 @@ const PROVIDERS: ProviderConfig[] = [
   { id: "qwen", label: "Qwen", placeholder: "...", icon: "🟠" },
 ];
 
-type ProviderStatus = Record<
-  Provider,
-  { stored: boolean; preview: string | null }
->;
-
-const STORAGE_KEY = "bureau_provider_keys_status";
-
-function loadStatus(): ProviderStatus {
-  if (typeof window === "undefined") {
-    return Object.fromEntries(
-      PROVIDERS.map((p) => [p.id, { stored: false, preview: null }]),
-    ) as ProviderStatus;
-  }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as ProviderStatus;
-  } catch {
-    // ignore
-  }
-  return Object.fromEntries(
-    PROVIDERS.map((p) => [p.id, { stored: false, preview: null }]),
-  ) as ProviderStatus;
-}
-
-function saveStatus(status: ProviderStatus) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(status));
+function fetcher(): Promise<ProviderKeyStatus[]> {
+  return createBureauClient().listProviderKeys();
 }
 
 export function ProviderKeysTab() {
-  const [status, setStatus] = useState<ProviderStatus>(loadStatus);
+  const {
+    data: serverKeys,
+    error,
+    mutate,
+  } = useSWR<ProviderKeyStatus[]>("provider-keys", fetcher, {
+    revalidateOnFocus: true,
+  });
+
   const [inputs, setInputs] = useState<Partial<Record<Provider, string>>>({});
   const [saving, setSaving] = useState<Provider | null>(null);
   const [removing, setRemoving] = useState<Provider | null>(null);
   const [errors, setErrors] = useState<Partial<Record<Provider, string>>>({});
 
-  useEffect(() => {
-    setStatus(loadStatus());
-  }, []);
+  // Build a lookup map from server data
+  const statusMap = new Map<string, ProviderKeyStatus>(
+    (serverKeys ?? []).map((k) => [k.provider, k]),
+  );
 
   async function handleSave(provider: Provider) {
     const key = inputs[provider]?.trim();
@@ -77,14 +63,8 @@ export function ProviderKeysTab() {
     setErrors((prev) => ({ ...prev, [provider]: undefined }));
     try {
       await createBureauClient().storeProviderKey(provider, key);
-      const preview = key.slice(-4);
-      const next: ProviderStatus = {
-        ...status,
-        [provider]: { stored: true, preview },
-      };
-      setStatus(next);
-      saveStatus(next);
       setInputs((prev) => ({ ...prev, [provider]: "" }));
+      await mutate();
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
@@ -101,12 +81,7 @@ export function ProviderKeysTab() {
     setRemoving(provider);
     try {
       await createBureauClient().removeProviderKey(provider);
-      const next: ProviderStatus = {
-        ...status,
-        [provider]: { stored: false, preview: null },
-      };
-      setStatus(next);
-      saveStatus(next);
+      await mutate();
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
@@ -117,14 +92,24 @@ export function ProviderKeysTab() {
     }
   }
 
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-4 text-sm text-red-400">
+        Failed to load provider key status — your API key may lack{" "}
+        <code className="text-blue-400">provider-keys:write</code> permission.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 max-w-lg">
-      <p className="text-xs text-muted mb-4">
+      <p className="text-xs text-muted">
         Provider keys are encrypted server-side (AES-256-GCM). They cannot be
         retrieved after storage.
       </p>
       {PROVIDERS.map(({ id, label, placeholder, icon }) => {
-        const s = status[id];
+        const s = statusMap.get(id);
+        const stored = s?.isActive === true;
         const inputValue = inputs[id] ?? "";
         const isSaving = saving === id;
         const isRemoving = removing === id;
@@ -141,11 +126,14 @@ export function ProviderKeysTab() {
                 <span className="text-sm font-medium text-primary">
                   {label}
                 </span>
+                {!serverKeys && (
+                  <span className="text-xs text-muted">loading…</span>
+                )}
               </div>
-              {s.stored ? (
+              {stored ? (
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-mono text-muted">
-                    &#x2022;&#x2022;&#x2022;&#x2022;{s.preview}
+                    ••••{s?.keyPreview ?? ""}
                   </span>
                   <button
                     onClick={() => handleRemove(id)}
@@ -156,11 +144,14 @@ export function ProviderKeysTab() {
                   </button>
                 </div>
               ) : (
-                <span className="text-xs text-muted">Not stored</span>
+                <span className="inline-flex items-center gap-1 text-xs text-muted">
+                  <span className="h-1.5 w-1.5 rounded-full bg-muted" />
+                  Not stored
+                </span>
               )}
             </div>
 
-            {!s.stored && (
+            {!stored && (
               <div className="flex gap-2">
                 <input
                   type="password"
