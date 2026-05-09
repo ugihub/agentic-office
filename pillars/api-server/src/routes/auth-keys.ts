@@ -240,4 +240,20 @@ export const authKeyRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ provider, removed: true });
     },
   );
+
+  // GET /auth/provider-keys — list stored provider key metadata (no plaintext)
+  fastify.get(
+    "/auth/provider-keys",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = requireAuth(request, reply);
+      requirePermission(auth, "provider-keys:write", reply);
+
+      const keys = await UserProviderKeyModel.find({ userId: auth.userId })
+        .select("provider isActive keyPreview lastUsedAt createdAt")
+        .lean()
+        .exec();
+
+      return reply.send({ keys });
+    },
+  );
 };
