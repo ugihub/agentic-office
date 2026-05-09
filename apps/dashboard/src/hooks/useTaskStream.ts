@@ -83,6 +83,11 @@ export function useTaskStream(taskId: string, active: boolean): StreamState {
               next.activeDivision = null;
             }
 
+            if (event.event === "task.cancelled") {
+              next.done = true;
+              next.activeDivision = null;
+            }
+
             return next;
           });
         }
