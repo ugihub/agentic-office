@@ -38,11 +38,18 @@ export interface TaskEnvelope {
   tenantId: string;
   currentStage: TaskStage;
   executionPath: ExecutionPath;
-  finalOutput: string | null;
+  /** Only present in full envelope (GET /tasks/:id), not in list responses */
+  finalOutput?: string | null;
   outputQuality: OutputQuality | null;
   costUsd: string | null;
   pendingDecision: PendingDecision | null;
+  completedAt?: string | null;
+  /** ISO string — same as submittedAt, kept for compat */
   createdAt: string;
+  /** ISO string — when task was submitted */
+  submittedAt: string;
+  /** First 60 chars of prompt — only in list responses */
+  promptPreview: string | null;
   updatedAt: string;
 }
 
@@ -144,9 +151,23 @@ export interface TaskFailedEvent {
   attempts: number;
 }
 
+export interface TaskCancelledEvent {
+  event: "task.cancelled";
+  taskId: string;
+}
+
+export interface ProviderKeyStatus {
+  provider: string;
+  isActive: boolean;
+  keyPreview: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
 export type BureauSSEEvent =
   | StageChangedEvent
   | DivisionProgressEvent
   | DecisionRequiredEvent
   | TaskCompletedEvent
-  | TaskFailedEvent;
+  | TaskFailedEvent
+  | TaskCancelledEvent;

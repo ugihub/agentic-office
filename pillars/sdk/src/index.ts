@@ -42,4 +42,6 @@ export type {
   DecisionRequiredEvent,
   TaskCompletedEvent,
   TaskFailedEvent,
+  TaskCancelledEvent,
+  ProviderKeyStatus,
 } from "./types.js";
