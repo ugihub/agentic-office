@@ -2,6 +2,7 @@
 import useSWR from "swr";
 import { useState } from "react";
 import { createBureauClient } from "@/lib/bureau-client";
+import { BureauError } from "@bureau/sdk";
 import type { ProviderKeyStatus } from "@bureau/sdk";
 
 type Provider =
@@ -92,17 +93,25 @@ export function ProviderKeysTab() {
     }
   }
 
-  if (error) {
-    return (
-      <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-4 text-sm text-red-400">
-        Failed to load provider key status — your API key may lack{" "}
-        <code className="text-blue-400">provider-keys:write</code> permission.
-      </div>
-    );
+  function listErrorMsg(): string {
+    if (!error) return "";
+    if (error instanceof BureauError) {
+      if (error.status === 401)
+        return "No API key configured. Set one in the Connection tab first.";
+      if (error.status === 403)
+        return "Current key lacks provider-keys:write permission.";
+    }
+    return "Cannot reach the API — check Connection tab.";
   }
 
   return (
     <div className="space-y-3 max-w-lg">
+      {error && (
+        <div className="rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
+          <span className="text-red-400 mt-0.5 text-sm">⚠</span>
+          <p className="text-sm text-red-400">{listErrorMsg()}</p>
+        </div>
+      )}
       <p className="text-xs text-muted">
         Provider keys are encrypted server-side (AES-256-GCM). They cannot be
         retrieved after storage.

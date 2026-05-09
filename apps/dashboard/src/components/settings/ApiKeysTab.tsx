@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { createBureauClient } from "@/lib/bureau-client";
+import { BureauError } from "@bureau/sdk";
 import type { ApiKey, CreateApiKeyResult } from "@bureau/sdk";
 
 const PERMISSIONS = [
@@ -118,19 +119,25 @@ export function ApiKeysTab() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="rounded-lg bg-danger/10 border border-danger/30 p-4">
-        <p className="text-sm text-red-400">
-          Failed to load API keys — your current key may lack{" "}
-          <code className="text-brand-400">keys:read</code> permission.
-        </p>
-      </div>
-    );
+  function listErrorMessage(): string {
+    if (!error) return "";
+    if (error instanceof BureauError) {
+      if (error.status === 401)
+        return "No API key configured. Set one in the Connection tab first.";
+      if (error.status === 403)
+        return "Current key lacks keys:read permission.";
+    }
+    return "Cannot reach the API — check Connection tab.";
   }
 
   return (
     <div className="space-y-6 max-w-2xl">
+      {error && (
+        <div className="rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3 flex items-start gap-2">
+          <span className="text-red-400 mt-0.5 text-sm">⚠</span>
+          <p className="text-sm text-red-400">{listErrorMessage()}</p>
+        </div>
+      )}
       {/* Plaintext modal */}
       {newKey !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">

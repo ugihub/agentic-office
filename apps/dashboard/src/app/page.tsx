@@ -115,6 +115,12 @@ export default function HomePage() {
               <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
               live
             </span>
+            <Link
+              href="/tasks"
+              className="text-[11px] text-muted hover:text-secondary"
+            >
+              View all →
+            </Link>
           </div>
         </div>
 

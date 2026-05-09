@@ -10,7 +10,8 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: "Workspace",
     items: [
       { href: "/", label: "Dashboard", icon: "⊞", exact: true },
-      { href: "/tasks/new", label: "New Task", icon: "▶" },
+      { href: "/tasks", label: "All Tasks", icon: "≡", exact: true },
+      { href: "/tasks/new", label: "New Task", icon: "▶", exact: true },
     ],
   },
   {
