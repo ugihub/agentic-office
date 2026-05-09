@@ -147,13 +147,13 @@ export function ApiKeysTab() {
               </p>
             </div>
             <p className="text-xs text-warning">
-              &#x26A0; This key will not be shown again. Copy it now.
+              ⚠ This key will not be shown again. Copy it now.
             </p>
             <button
               onClick={() => handleCopy(newKey.plaintext)}
               className="w-full rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
             >
-              {copied ? "&#x2713; Copied!" : "Copy to Clipboard"}
+              {copied ? "✓ Copied!" : "Copy to Clipboard"}
             </button>
             <button
               onClick={() => setNewKey(null)}
