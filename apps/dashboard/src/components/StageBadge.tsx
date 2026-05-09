@@ -1,38 +1,85 @@
 import type { TaskStage } from "@bureau/sdk";
 
-const STAGE_STYLES: Record<TaskStage, string> = {
-  Submitted: "bg-blue-900/40 text-blue-300 border border-blue-800",
-  Preparing: "bg-running/20 text-purple-300 border border-running/40",
-  Researching: "bg-running/20 text-purple-300 border border-running/40",
-  Producing: "bg-running/20 text-purple-300 border border-running/40",
-  Reviewing: "bg-running/20 text-purple-300 border border-running/40",
-  Formatting: "bg-running/20 text-purple-300 border border-running/40",
-  AwaitingUserDecision:
-    "bg-warning/20 text-yellow-300 border border-warning/40 animate-pulse",
-  Completed: "bg-success/20 text-green-300 border border-success/40",
-  Failed: "bg-danger/20 text-red-300 border border-danger/40",
-  Cancelled: "bg-raised text-muted border border-border",
+// Color group → which stages belong to each visual bucket
+const STAGE_STYLE: Record<
+  TaskStage,
+  { ring: string; text: string; dot: string }
+> = {
+  Submitted: {
+    ring: "border-blue-800/60   bg-blue-900/20",
+    text: "text-blue-300",
+    dot: "bg-blue-400",
+  },
+  Preparing: {
+    ring: "border-blue-800/60   bg-blue-900/20",
+    text: "text-blue-300",
+    dot: "bg-blue-400",
+  },
+  Researching: {
+    ring: "border-violet-700/60 bg-violet-900/20",
+    text: "text-violet-300",
+    dot: "bg-violet-400",
+  },
+  Producing: {
+    ring: "border-violet-700/60 bg-violet-900/20",
+    text: "text-violet-300",
+    dot: "bg-violet-400 shadow-[0_0_4px_#8b5cf6]",
+  },
+  Reviewing: {
+    ring: "border-violet-700/60 bg-violet-900/20",
+    text: "text-violet-300",
+    dot: "bg-violet-400",
+  },
+  Formatting: {
+    ring: "border-blue-800/60   bg-blue-900/20",
+    text: "text-blue-300",
+    dot: "bg-blue-400",
+  },
+  AwaitingUserDecision: {
+    ring: "border-amber-700/60  bg-amber-900/20",
+    text: "text-amber-300",
+    dot: "bg-amber-400",
+  },
+  Completed: {
+    ring: "border-emerald-700/60 bg-emerald-900/20",
+    text: "text-emerald-300",
+    dot: "bg-emerald-400",
+  },
+  Failed: {
+    ring: "border-red-700/60    bg-red-900/20",
+    text: "text-red-300",
+    dot: "bg-red-400",
+  },
+  Cancelled: {
+    ring: "border-border        bg-raised",
+    text: "text-muted",
+    dot: "bg-muted",
+  },
 };
 
-const STAGE_DOTS: Partial<Record<TaskStage, string>> = {
-  Preparing: "●",
-  Researching: "●",
-  Producing: "●",
-  Reviewing: "●",
-  Formatting: "●",
-  AwaitingUserDecision: "⚠",
-  Completed: "✓",
-  Failed: "✗",
+const STAGE_LABEL: Partial<Record<TaskStage, string>> = {
+  AwaitingUserDecision: "Decision",
 };
+
+const PULSE_STAGES = new Set<TaskStage>([
+  "Producing",
+  "Reviewing",
+  "AwaitingUserDecision",
+]);
 
 export function StageBadge({ stage }: { stage: TaskStage }) {
-  const dot = STAGE_DOTS[stage];
+  const s = STAGE_STYLE[stage];
+  const label = STAGE_LABEL[stage] ?? stage;
+  const pulse = PULSE_STAGES.has(stage);
+
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${STAGE_STYLES[stage]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${s.ring} ${s.text}`}
     >
-      {dot && <span className="text-[10px]">{dot}</span>}
-      {stage}
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${s.dot} ${pulse ? "animate-pulse" : ""}`}
+      />
+      {label}
     </span>
   );
 }
