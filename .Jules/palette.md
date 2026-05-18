@@ -1,0 +1,3 @@
+## 2026-05-18 - Reusable Submit Button Spinner Pattern
+**Learning:** For submit buttons in this app's design system, adding an inline SVG spinner alongside text works perfectly using existing Tailwind utility classes `flex items-center justify-center gap-2`. Additionally, form components (like TaskForm) were missing basic ARIA associations between inputs and helper text/error messages.
+**Action:** Always check form inputs for missing `aria-describedby` links to their character counts or helper text, ensure error containers have `role="alert"`, and use the `flex gap-2` pattern for adding loading spinners to buttons.
