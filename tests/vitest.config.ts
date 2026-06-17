@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     testTimeout: 30_000,
-    include: ["e2e/**/*.test.ts", "performance/**/*.test.ts"],
+    include: ["e2e/**/*.test.ts", "performance/**/*.test.ts", "security/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
