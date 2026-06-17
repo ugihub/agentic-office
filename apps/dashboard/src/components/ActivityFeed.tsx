@@ -48,9 +48,15 @@ const STAGE_EVENT: Partial<
   },
 };
 
+const DEFAULT_STAGE_EVENT: ActivityItem = {
+  icon: "▸",
+  iconCls: "bg-blue-900/40 text-blue-400",
+  verb: "submitted",
+};
+
 export function ActivityFeed({ tasks }: ActivityFeedProps) {
   const items: ActivityItem[] = tasks.slice(0, 6).map((task) => {
-    const meta = STAGE_EVENT[task.currentStage] ?? STAGE_EVENT["Submitted"]!;
+    const meta = STAGE_EVENT[task.currentStage] ?? DEFAULT_STAGE_EVENT;
     const preview = task.promptPreview
       ? task.promptPreview.slice(0, 45)
       : task.taskId.slice(0, 20) + "…";
