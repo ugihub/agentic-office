@@ -13,7 +13,7 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -45,6 +45,7 @@ services:
     image: jaegertracing/all-in-one:1.56
     container_name: bureau-jaeger
     restart: unless-stopped
+    user: root # Named volume created root-owned; Jaeger default UID 10001 can't write
     ports:
       - "16686:16686" # Jaeger UI
       - "4317:4317" # OTLP gRPC

@@ -179,15 +179,38 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
       const filter: Record<string, unknown> = { tenantId: auth.tenantId };
       if (query.stage) filter["currentStage"] = query.stage;
 
-      const tasks = await TaskEnvelopeModel.find(filter)
+      const rawTasks = await TaskEnvelopeModel.find(filter)
         .select(
-          "taskId currentStage executionPath submittedAt completedAt outputQuality",
+          "taskId tenantId currentStage executionPath submittedAt completedAt updatedAt outputQuality pendingDecision budget.consumed.costUsd originalRequest.prompt",
         )
         .sort({ submittedAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean()
         .exec();
+
+      const tasks = rawTasks.map((t) => {
+        const budget = t.budget as
+          | { consumed: { costUsd: { toString(): string } } }
+          | undefined;
+        const req = t.originalRequest as { prompt?: string } | undefined;
+        return {
+          taskId: t.taskId,
+          tenantId: t.tenantId,
+          currentStage: t.currentStage,
+          executionPath: t.executionPath,
+          submittedAt: t.submittedAt,
+          createdAt: t.submittedAt, // alias — SDK TaskEnvelope uses createdAt
+          updatedAt: t.updatedAt,
+          completedAt: t.completedAt,
+          outputQuality: t.outputQuality ?? null,
+          pendingDecision:
+            (t.pendingDecision as unknown as Record<string, unknown> | null) ??
+            null,
+          promptPreview: req?.prompt?.slice(0, 60) ?? null,
+          costUsd: budget?.consumed.costUsd?.toString() ?? null,
+        };
+      });
 
       return reply.send({ tasks, limit, skip });
     },
@@ -292,13 +315,14 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Poll for updates (simplified — production would use MongoDB change streams)
       let lastStageVersion = -1;
+      let lastStage: string = task.currentStage;
       const poll = setInterval(async () => {
         const current = await TaskEnvelopeModel.findOne({
           taskId,
           tenantId: auth.tenantId,
         })
           .select(
-            "currentStage stageVersion pendingDecision finalOutput outputQuality",
+            "currentStage stageVersion pendingDecision finalOutput outputQuality budget.consumed.costUsd intermediateOutputs.qa retryCount",
           )
           .lean()
           .exec();
@@ -310,7 +334,10 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         if (current.stageVersion !== lastStageVersion) {
+          const prevStage = lastStage;
           lastStageVersion = current.stageVersion;
+          lastStage = current.currentStage;
+          const at = new Date().toISOString();
 
           if (current.currentStage === "AwaitingUserDecision") {
             sendEvent("decision_required", {
@@ -322,11 +349,27 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
               taskId,
               output: current.finalOutput,
               outputQuality: current.outputQuality,
+              costUsd: String(
+                (
+                  current.budget as {
+                    consumed: { costUsd: { toString(): string } };
+                  }
+                ).consumed.costUsd,
+              ),
             });
             clearInterval(poll);
             reply.raw.end();
           } else if (current.currentStage === "Failed") {
-            sendEvent("task.failed", { taskId });
+            const qaOutput = current.intermediateOutputs?.qa as
+              | { failureReason?: string }
+              | null
+              | undefined;
+            sendEvent("task.failed", {
+              taskId,
+              reason: qaOutput?.failureReason ?? "Task failed",
+              attempts:
+                (current.retryCount as { production: number }).production + 1,
+            });
             clearInterval(poll);
             reply.raw.end();
           } else if (current.currentStage === "Cancelled") {
@@ -336,7 +379,9 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
           } else {
             sendEvent("task.stage.changed", {
               taskId,
+              from: prevStage,
               to: current.currentStage,
+              at,
             });
           }
         }

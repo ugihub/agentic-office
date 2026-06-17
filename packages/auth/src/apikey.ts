@@ -2,8 +2,8 @@
  * API Key management — hashing, validation, generation.
  *
  * CRITICAL: NEVER store plaintext API keys. Only store SHA-256 hash.
- * Format: bureau_live_<random32bytes_base62>
- * Example: bureau_live_aBcD1234XyZw...
+ * Format: bureau_live_<32-bytes-base64url>
+ * Example: bureau_live_<placeholder-do-not-use>
  *
  * The key is shown to the user ONCE on creation.
  * Subsequent validation: hash incoming key, compare with stored hash.

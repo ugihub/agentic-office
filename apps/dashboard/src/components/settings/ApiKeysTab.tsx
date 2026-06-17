@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { createBureauClient } from "@/lib/bureau-client";
+import { BureauError } from "@bureau/sdk";
 import type { ApiKey, CreateApiKeyResult } from "@bureau/sdk";
 
 const PERMISSIONS = [
@@ -118,19 +119,40 @@ export function ApiKeysTab() {
     );
   }
 
-  if (error) {
+  function listErrorBanner(): React.ReactNode {
+    if (!error) return null;
+    let msg: string;
+    let hint: string | null = null;
+    if (error instanceof BureauError) {
+      if (error.status === 401) {
+        msg = "No API key configured — go to the Connection tab and enter one.";
+        hint =
+          "First-time setup: set BUREAU_SUPER_KEY in your .env, enter it as your API Key in Connection, then create a scoped key here.";
+      } else if (error.status === 403) {
+        msg =
+          "Current key lacks keys:read permission — creating keys also requires keys:write.";
+        hint =
+          "Use BUREAU_SUPER_KEY (see .env.example) or a key with keys:read + keys:write.";
+      } else {
+        msg = "Cannot reach the API — check Connection tab.";
+      }
+    } else {
+      msg = "Cannot reach the API — check Connection tab.";
+    }
     return (
-      <div className="rounded-lg bg-danger/10 border border-danger/30 p-4">
-        <p className="text-sm text-red-400">
-          Failed to load API keys — your current key may lack{" "}
-          <code className="text-brand-400">keys:read</code> permission.
-        </p>
+      <div className="rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3 space-y-1">
+        <div className="flex items-start gap-2">
+          <span className="text-red-400 mt-0.5 text-sm">⚠</span>
+          <p className="text-sm text-red-400">{msg}</p>
+        </div>
+        {hint && <p className="text-xs text-red-500/70 pl-5">{hint}</p>}
       </div>
     );
   }
 
   return (
     <div className="space-y-6 max-w-2xl">
+      {listErrorBanner()}
       {/* Plaintext modal */}
       {newKey !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -147,13 +169,13 @@ export function ApiKeysTab() {
               </p>
             </div>
             <p className="text-xs text-warning">
-              &#x26A0; This key will not be shown again. Copy it now.
+              ⚠ This key will not be shown again. Copy it now.
             </p>
             <button
               onClick={() => handleCopy(newKey.plaintext)}
               className="w-full rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
             >
-              {copied ? "&#x2713; Copied!" : "Copy to Clipboard"}
+              {copied ? "✓ Copied!" : "Copy to Clipboard"}
             </button>
             <button
               onClick={() => setNewKey(null)}

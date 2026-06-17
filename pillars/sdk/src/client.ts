@@ -20,6 +20,7 @@ import type {
   CreateApiKeyResult,
   DecisionAction,
   BureauSSEEvent,
+  ProviderKeyStatus,
 } from "./types.js";
 import { streamSSE } from "./streaming.js";
 
@@ -326,6 +327,16 @@ export class BureauClient {
     return this.fetch<{ removed: boolean }>(`/auth/provider-keys/${provider}`, {
       method: "DELETE",
     });
+  }
+
+  /**
+   * List stored LLM provider key statuses (no plaintext).
+   */
+  async listProviderKeys(): Promise<ProviderKeyStatus[]> {
+    const result = await this.fetch<{ keys: ProviderKeyStatus[] }>(
+      "/auth/provider-keys",
+    );
+    return result.keys;
   }
 
   // ─── Health ───────────────────────────────────────────────────────────────────

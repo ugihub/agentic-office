@@ -26,8 +26,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: "9"
+        # version: read from packageManager field in package.json
+        # (don't pass `version:` here — it conflicts with the packageManager field)
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -84,7 +84,7 @@ jobs:
             "sk-ant-[A-Za-z0-9_-]+"          # Anthropic key
             "AIza[A-Za-z0-9_-]{35}"           # Google API key
             "sk-[A-Za-z0-9]{48}"              # OpenAI key
-            "bureau_live_[A-Za-z0-9]+"        # Bureau production key
+            "bureau_live_[A-Za-z0-9]{12,}"    # Bureau production key (12+ random chars after prefix)
             "ghp_[A-Za-z0-9]{36}"             # GitHub token
             "mongodb\+srv://[^:]+:[^@]+"       # MongoDB Atlas URI with password
             "re_[A-Za-z0-9]{32}"              # Resend API key
@@ -95,7 +95,7 @@ jobs:
               --include="*.ts" --include="*.js" --include="*.json" \
               --include="*.yaml" --include="*.yml" --include="*.env" \
               --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git \
-              . 2>/dev/null | grep -v ".example" | grep -v ".test." | grep -v "# " || true)
+              . 2>/dev/null | grep -v "\.example" | grep -v "\.test\." | grep -v "//.*example" | grep -v "^Binary" || true)
             if [ -n "$matches" ]; then
               echo "POTENTIAL SECRET FOUND matching pattern: $pattern"
               echo "$matches"
@@ -117,8 +117,7 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: "9"
+        # version: read from packageManager field in package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

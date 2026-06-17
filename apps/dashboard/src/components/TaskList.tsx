@@ -15,7 +15,7 @@ const FILTER_LABELS: Record<Filter, string> = {
   running: "Running",
   completed: "Completed",
   failed: "Failed",
-  awaiting: "Awaiting Decision",
+  awaiting: "Decision",
 };
 
 const RUNNING_STAGES = new Set<TaskStage>([
@@ -41,6 +41,23 @@ function fetcher(): Promise<TaskEnvelope[]> {
   return createBureauClient().listTasks({ limit: 100 });
 }
 
+/** Path tier badge */
+function PathBadge({ path }: { path: string }) {
+  const styles: Record<string, string> = {
+    fast: "bg-emerald-900/20 text-emerald-300 border-emerald-800/40",
+    standard: "bg-blue-900/20 text-blue-300 border-blue-800/40",
+    full: "bg-violet-900/20 text-violet-300 border-violet-800/40",
+  };
+  const cls = styles[path] ?? "bg-raised text-muted border-border";
+  return (
+    <span
+      className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-semibold ${cls}`}
+    >
+      {path}
+    </span>
+  );
+}
+
 export function TaskList() {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
@@ -49,23 +66,33 @@ export function TaskList() {
     data: tasks,
     error,
     isLoading,
-  } = useSWR<TaskEnvelope[]>("tasks", fetcher, { refreshInterval: 10000 });
+  } = useSWR<TaskEnvelope[]>("tasks", fetcher, { refreshInterval: 8000 });
 
   if (isLoading) {
     return (
-      <div className="text-center py-12 text-secondary">Loading tasks…</div>
+      <div className="space-y-4">
+        <div className="grid grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-24 rounded-xl border border-border bg-surface animate-pulse"
+            />
+          ))}
+        </div>
+        <div className="h-48 rounded-xl border border-border bg-surface animate-pulse" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-lg bg-danger/10 border border-danger/30 p-4">
+      <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-4">
         <p className="text-sm text-red-400">
           Failed to load tasks — check{" "}
-          <Link href="/settings" className="underline text-brand-400">
+          <Link href="/settings" className="underline text-blue-400">
             Settings
           </Link>{" "}
-          → API connection.
+          → Connection tab.
         </p>
       </div>
     );
@@ -79,78 +106,95 @@ export function TaskList() {
       <MetricsRow tasks={allTasks} />
 
       {/* Filter pills */}
-      <div className="flex gap-2 flex-wrap">
-        {(Object.keys(FILTER_LABELS) as Filter[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              filter === f
-                ? "bg-brand-500 text-white"
-                : "bg-raised text-secondary border border-border hover:text-primary"
-            }`}
-          >
-            {FILTER_LABELS[f]}
-          </button>
-        ))}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1.5 flex-wrap">
+          {(Object.keys(FILTER_LABELS) as Filter[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                filter === f
+                  ? "bg-brand-500 text-white shadow-sm"
+                  : "bg-raised text-secondary border border-border hover:text-primary hover:border-zinc-600"
+              }`}
+            >
+              {FILTER_LABELS[f]}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-muted">
+          {filtered.length} task{filtered.length !== 1 ? "s" : ""}
+        </span>
       </div>
 
       {filtered.length === 0 && allTasks.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-secondary mb-4">No tasks yet.</p>
+        <div className="rounded-xl border border-dashed border-border py-16 text-center">
+          <p className="text-secondary mb-4 text-sm">No tasks yet.</p>
           <Link
             href="/tasks/new"
-            className="inline-flex items-center rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
           >
-            Submit your first task
+            ▶ Submit your first task
           </Link>
         </div>
       )}
 
       {filtered.length === 0 && allTasks.length > 0 && (
-        <div className="text-center py-8 text-secondary text-sm">
+        <div className="rounded-xl border border-border py-10 text-center text-sm text-muted">
           No tasks match this filter.
         </div>
       )}
 
       {filtered.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-raised">
-              <tr>
-                {["Task ID", "Stage", "Path", "Created"].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map((task) => (
-                <tr
-                  key={task.taskId}
-                  className="hover:bg-raised cursor-pointer transition-colors"
-                  onClick={() => router.push(`/tasks/${task.taskId}`)}
-                >
-                  <td className="px-4 py-3 text-xs font-mono text-secondary">
-                    {task.taskId.slice(0, 16)}…
-                  </td>
-                  <td className="px-4 py-3">
-                    <StageBadge stage={task.currentStage} />
-                  </td>
-                  <td className="px-4 py-3 text-xs text-secondary capitalize">
-                    {task.executionPath}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted">
-                    {new Date(task.createdAt).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Table header */}
+          <div className="grid grid-cols-[2.2fr_1.1fr_.9fr_.7fr_.7fr] border-b border-border bg-[#141414] px-4 py-2.5">
+            {["Task", "Stage", "Path", "Cost", "Submitted"].map((h) => (
+              <div
+                key={h}
+                className="text-[10px] font-semibold uppercase tracking-widest text-muted"
+              >
+                {h}
+              </div>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {filtered.map((task) => (
+            <div
+              key={task.taskId}
+              className="grid grid-cols-[2.2fr_1.1fr_.9fr_.7fr_.7fr] items-center border-b border-[#141414] px-4 py-3 last:border-b-0 hover:bg-[#141414] cursor-pointer transition-colors"
+              onClick={() => router.push(`/tasks/${task.taskId}`)}
+            >
+              <div className="min-w-0 pr-4">
+                <p className="text-[11px] font-mono text-blue-400 truncate">
+                  {task.taskId}
+                </p>
+                {task.promptPreview && (
+                  <p className="mt-0.5 text-xs text-secondary truncate">
+                    {task.promptPreview}
+                  </p>
+                )}
+              </div>
+              <div>
+                <StageBadge stage={task.currentStage} />
+              </div>
+              <div>
+                <PathBadge path={task.executionPath} />
+              </div>
+              <div className="text-xs font-mono text-muted">
+                {task.costUsd ? `$${parseFloat(task.costUsd).toFixed(3)}` : "—"}
+              </div>
+              <div className="text-xs text-muted">
+                {new Date(
+                  task.submittedAt ?? task.createdAt,
+                ).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

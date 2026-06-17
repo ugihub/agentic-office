@@ -90,7 +90,8 @@ export async function* streamSSE(
           // Auto-stop on terminal events
           if (
             event.event === "task.completed" ||
-            event.event === "task.failed"
+            event.event === "task.failed" ||
+            event.event === "task.cancelled"
           ) {
             return;
           }

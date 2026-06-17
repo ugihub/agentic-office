@@ -31,6 +31,28 @@ declare module "fastify" {
 const log = createLogger({ division: "ITSSC" });
 
 /**
+ * Super-key bypass: if BUREAU_SUPER_KEY env var is set and the provided key
+ * matches, grant all permissions without a DB lookup.
+ * Intended for initial bootstrap when no API keys exist yet.
+ */
+function checkSuperKey(plaintext: string): AuthContext | null {
+  const superKey = process.env["BUREAU_SUPER_KEY"];
+  if (!superKey || superKey.length < 16 || plaintext !== superKey) return null;
+  return {
+    tenantId: "tenant_super",
+    userId: "user_super",
+    permissions: [
+      "task:read",
+      "task:write",
+      "keys:read",
+      "keys:write",
+      "provider-keys:write",
+    ],
+    authMethod: "api_key",
+  };
+}
+
+/**
  * Lookup API key from DB.
  * Returns null if not found or revoked.
  */
@@ -79,6 +101,12 @@ export const authPlugin: FastifyPluginAsync = async (fastify) => {
       const authHeader = request.headers.authorization;
 
       if (typeof apiKey === "string" && apiKey.length > 0) {
+        // Super-key bypass (bootstrap only)
+        const superCtx = checkSuperKey(apiKey);
+        if (superCtx !== null) {
+          request.authContext = superCtx;
+          return;
+        }
         // API key auth
         const ctx = await lookupApiKey(apiKey);
         if (ctx !== null) {
