@@ -40,6 +40,36 @@ async function waitForHealthy() {
   return false;
 }
 
+/**
+ * Dump container logs on failure for debuggability.
+ * Best-effort — never throws. Uses docker compose v2 CLI.
+ */
+async function dumpContainerLogs() {
+  const { spawn } = await import("node:child_process");
+  const services = ["api-server", "workers"];
+  for (const svc of services) {
+    console.log(`\n--- docker compose logs ${svc} (tail 50) ---`);
+    await new Promise((resolve) => {
+      const proc = spawn(
+        "docker",
+        ["compose", "logs", "--tail=50", "--no-color", svc],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+      proc.stdout.on("data", (chunk) => process.stdout.write(chunk));
+      proc.stderr.on("data", (chunk) => process.stderr.write(chunk));
+      proc.on("exit", () => resolve(undefined));
+      proc.on("error", () => resolve(undefined));
+      // hard timeout — don't block forever if docker daemon is hung
+      setTimeout(() => {
+        try {
+          proc.kill("SIGTERM");
+        } catch {}
+        resolve(undefined);
+      }, 5_000);
+    });
+  }
+}
+
 async function main() {
   console.log(`\n🔍 Bureau Docker Smoke Test`);
   console.log(`   API URL: ${API_URL}\n`);
@@ -48,6 +78,7 @@ async function main() {
   process.stdout.write("1. Waiting for /health/live... ");
   if (!(await waitForHealthy())) {
     console.log("❌ TIMEOUT — API server not reachable");
+    await dumpContainerLogs();
     process.exit(1);
   }
   console.log("✅ OK");

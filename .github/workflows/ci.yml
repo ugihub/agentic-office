@@ -186,3 +186,15 @@ jobs:
         run: node scripts/smoke-docker.mjs
         env:
           BUREAU_API_URL: http://localhost:3001
+
+      - name: Capture container logs (always — for debugging)
+        if: always()
+        run: |
+          echo "--- bureau-api-server ---"
+          docker compose logs --tail=100 --no-color api-server 2>&1 || true
+          echo "--- bureau-workers ---"
+          docker compose logs --tail=100 --no-color workers 2>&1 || true
+          echo "--- bureau-mongo ---"
+          docker compose logs --tail=50 --no-color mongo 2>&1 || true
+          echo "--- bureau-redis ---"
+          docker compose logs --tail=50 --no-color redis 2>&1 || true
