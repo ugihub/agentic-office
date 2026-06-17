@@ -4,11 +4,14 @@
 
 # ─── Stage 1: Install pnpm + resolve dependencies ────────────────────────────
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9 --activate
+ARG PNPM_VERSION=9.0.0
+ENV CI=true
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /app
 
 # ─── Stage 2: Install all dependencies (dev + prod) ──────────────────────────
-FROM base AS deps
+FROM base AS builder-deps
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/shared-kernel/package.json ./packages/shared-kernel/
 COPY packages/contracts/package.json ./packages/contracts/
@@ -22,30 +25,49 @@ COPY packages/agents-core/package.json ./packages/agents-core/
 COPY packages/task-machine/package.json ./packages/task-machine/
 COPY core/package.json ./core/
 COPY pillars/api-server/package.json ./pillars/api-server/
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set fetch-retries 5 && pnpm config set fetch-retry-mintimeout 20000 && pnpm config set network-concurrency 1 && pnpm install --frozen-lockfile
+
+# Re-resolve workspace symlinks so @bureau/* and `core` resolve at runtime
+# (Docker COPY strips the workspace symlink map that pnpm fetches on host).
+RUN pnpm install --frozen-lockfile --offline
 
 # ─── Stage 3: Build TypeScript → JavaScript ──────────────────────────────────
-FROM deps AS builder
+FROM builder-deps AS builder
 COPY tsconfig.base.json ./
-COPY packages/ ./packages/
+COPY packages/shared-kernel/ ./packages/shared-kernel/
+COPY packages/contracts/ ./packages/contracts/
+COPY packages/models/ ./packages/models/
+COPY packages/auth/ ./packages/auth/
+COPY packages/telemetry/ ./packages/telemetry/
+COPY packages/infra-mongo/ ./packages/infra-mongo/
+COPY packages/infra-messaging/ ./packages/infra-messaging/
+COPY packages/cost-analytics/ ./packages/cost-analytics/
+COPY packages/agents-core/ ./packages/agents-core/
+COPY packages/task-machine/ ./packages/task-machine/
 COPY core/ ./core/
 COPY pillars/api-server/ ./pillars/api-server/
-RUN pnpm --filter "@bureau/shared-kernel" build && \
-    pnpm --filter "@bureau/contracts" build && \
-    pnpm --filter "@bureau/models" build && \
-    pnpm --filter "@bureau/auth" build && \
-    pnpm --filter "@bureau/telemetry" build && \
-    pnpm --filter "@bureau/infra-mongo" build && \
-    pnpm --filter "@bureau/infra-messaging" build && \
-    pnpm --filter "@bureau/cost-analytics" build && \
-    pnpm --filter "@bureau/agents-core" build && \
-    pnpm --filter "@bureau/task-machine" build && \
-    pnpm --filter "@bureau/core" build && \
-    pnpm --filter "@bureau/api-server" build
+RUN pnpm --filter "@bureau/api-server..." build
 
 # ─── Stage 4: Prune dev dependencies ─────────────────────────────────────────
-FROM deps AS prod-deps
-RUN pnpm install --frozen-lockfile --prod
+FROM base AS prod-deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/shared-kernel/package.json ./packages/shared-kernel/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/models/package.json ./packages/models/
+COPY packages/auth/package.json ./packages/auth/
+COPY packages/telemetry/package.json ./packages/telemetry/
+COPY packages/infra-mongo/package.json ./packages/infra-mongo/
+COPY packages/infra-messaging/package.json ./packages/infra-messaging/
+COPY packages/cost-analytics/package.json ./packages/cost-analytics/
+COPY packages/agents-core/package.json ./packages/agents-core/
+COPY packages/task-machine/package.json ./packages/task-machine/
+COPY core/package.json ./core/
+COPY pillars/api-server/package.json ./pillars/api-server/
+RUN pnpm config set fetch-retries 5 && pnpm config set fetch-retry-mintimeout 20000 && pnpm config set network-concurrency 1 && pnpm install --frozen-lockfile
+
+# Re-resolve workspace symlinks so @bureau/* and `core` resolve at runtime
+# (Docker COPY strips the workspace symlink map that pnpm fetches on host).
+RUN pnpm install --frozen-lockfile --offline --prod --ignore-scripts
 
 # ─── Stage 5: Distroless runtime ─────────────────────────────────────────────
 # gcr.io/distroless/nodejs20-debian12:
@@ -64,32 +86,23 @@ ENV PORT=3001
 
 # Copy production node_modules (pruned)
 COPY --from=prod-deps --chown=nonroot:nonroot /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=nonroot:nonroot /app/packages ./packages
+COPY --from=prod-deps --chown=nonroot:nonroot /app/core ./core
+COPY --from=prod-deps --chown=nonroot:nonroot /app/pillars/api-server ./pillars/api-server
 
 # Copy compiled packages
 COPY --from=builder --chown=nonroot:nonroot /app/packages/shared-kernel/dist ./packages/shared-kernel/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/shared-kernel/package.json ./packages/shared-kernel/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/contracts/dist ./packages/contracts/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/contracts/package.json ./packages/contracts/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/models/dist ./packages/models/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/models/package.json ./packages/models/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/auth/dist ./packages/auth/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/auth/package.json ./packages/auth/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/telemetry/dist ./packages/telemetry/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/telemetry/package.json ./packages/telemetry/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/infra-mongo/dist ./packages/infra-mongo/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/infra-mongo/package.json ./packages/infra-mongo/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/infra-messaging/dist ./packages/infra-messaging/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/infra-messaging/package.json ./packages/infra-messaging/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/cost-analytics/dist ./packages/cost-analytics/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/cost-analytics/package.json ./packages/cost-analytics/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/agents-core/dist ./packages/agents-core/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/agents-core/package.json ./packages/agents-core/
 COPY --from=builder --chown=nonroot:nonroot /app/packages/task-machine/dist ./packages/task-machine/dist
-COPY --from=builder --chown=nonroot:nonroot /app/packages/task-machine/package.json ./packages/task-machine/
 COPY --from=builder --chown=nonroot:nonroot /app/core/dist ./core/dist
-COPY --from=builder --chown=nonroot:nonroot /app/core/package.json ./core/
 COPY --from=builder --chown=nonroot:nonroot /app/pillars/api-server/dist ./pillars/api-server/dist
-COPY --from=builder --chown=nonroot:nonroot /app/pillars/api-server/package.json ./pillars/api-server/
 
 # Distroless nonroot user (uid=65532)
 USER nonroot
@@ -100,4 +113,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD ["/nodejs/bin/node", "-e", "require('http').get('http://localhost:3001/health/live', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
 
-CMD ["/nodejs/bin/node", "pillars/api-server/dist/server.js"]
+CMD ["pillars/api-server/dist/server.js"]
