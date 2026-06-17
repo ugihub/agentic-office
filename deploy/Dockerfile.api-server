@@ -80,7 +80,12 @@ FROM gcr.io/distroless/nodejs20-debian12:nonroot AS runner
 
 WORKDIR /app
 
-ENV NODE_ENV=production
+# NOTE: NODE_ENV is intentionally NOT set here. The compose file passes
+# `NODE_ENV: development` for local/CI smoke tests, while Helm/k8s sets
+# `NODE_ENV: production`. Hardcoding it here caused CI api-server to
+# boot in production mode without a chance to inject JWT keys via env
+# substitution, triggering crashloop. The runtime env value from compose
+# or k8s is the single source of truth.
 # PORT used by Fastify listen
 ENV PORT=3001
 
