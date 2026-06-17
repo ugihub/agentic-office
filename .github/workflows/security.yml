@@ -26,11 +26,13 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
+        # version: read from packageManager field in package.json
+        # (don't pass `version:` here — it conflicts with the packageManager field)
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
+          node-version: "20"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -51,6 +53,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (filesystem)
         uses: aquasecurity/trivy-action@master
         with:
+          scan-type: "fs"
           scan-ref: "."
           trivy-config: tests/security/.trivyignore
           format: "sarif"
@@ -62,6 +65,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
+          sarif_file: "trivy-results.sarif"
 
   secret-scan:
     name: Secret Detection
@@ -69,6 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0 # Full history for secret detection
 
       - name: Run secret detection
         run: |
@@ -79,7 +84,7 @@ jobs:
             "sk-ant-[A-Za-z0-9_-]+"          # Anthropic key
             "AIza[A-Za-z0-9_-]{35}"           # Google API key
             "sk-[A-Za-z0-9]{48}"              # OpenAI key
-            "bureau_live_[A-Za-z0-9]+"        # Bureau production key
+            "bureau_live_[A-Za-z0-9]{12,}"    # Bureau production key (12+ random chars after prefix)
             "ghp_[A-Za-z0-9]{36}"             # GitHub token
             "mongodb\+srv://[^:]+:[^@]+"       # MongoDB Atlas URI with password
             "re_[A-Za-z0-9]{32}"              # Resend API key
@@ -90,7 +95,7 @@ jobs:
               --include="*.ts" --include="*.js" --include="*.json" \
               --include="*.yaml" --include="*.yml" --include="*.env" \
               --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git \
-              . 2>/dev/null | grep -v ".example" | grep -v ".test." | grep -v "# " || true)
+              . 2>/dev/null | grep -v "\.example" | grep -v "\.test\." | grep -v "//.*example" | grep -v "^Binary" || true)
             if [ -n "$matches" ]; then
               echo "POTENTIAL SECRET FOUND matching pattern: $pattern"
               echo "$matches"
@@ -112,11 +117,12 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
+        # version: read from packageManager field in package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
+          node-version: "20"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -147,6 +153,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         if: success()
         with:
+          image-ref: "bureau-api-server:scan"
           format: "sarif"
           output: "trivy-docker.sarif"
           severity: "HIGH,CRITICAL"
@@ -155,4 +162,5 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
+          sarif_file: "trivy-docker.sarif"
         continue-on-error: true
