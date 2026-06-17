@@ -24,7 +24,6 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -45,7 +44,6 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -69,7 +67,6 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -93,7 +90,6 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -116,7 +112,7 @@ jobs:
 
   test:
     name: Unit Tests
-    needs: build
+    needs: setup
     runs-on: ubuntu-latest
     services:
       redis:
@@ -146,7 +142,6 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -170,3 +165,36 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  docker-smoke:
+    name: Docker Build & Smoke
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Docker images
+        run: docker compose build api-server workers
+
+      - name: Start services
+        run: |
+          docker compose up -d mongo redis api-server workers
+          sleep 10
+
+      - name: Run smoke test (health only — no LLM key in CI)
+        run: node scripts/smoke-docker.mjs
+        env:
+          BUREAU_API_URL: http://localhost:3001
