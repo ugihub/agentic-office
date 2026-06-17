@@ -177,6 +177,9 @@ jobs:
       - name: Build Docker images
         run: docker compose build api-server workers
 
+      - name: Generate dev JWT keys (api-server requires them in production)
+        run: node scripts/gen-dev-jwt.mjs
+
       - name: Start services
         run: |
           docker compose up -d mongo redis api-server workers
