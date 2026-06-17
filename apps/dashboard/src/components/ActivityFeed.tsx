@@ -48,11 +48,11 @@ const STAGE_EVENT: Partial<
   },
 };
 
-const DEFAULT_STAGE_EVENT: ActivityItem = {
+const DEFAULT_STAGE_EVENT = {
   icon: "▸",
   iconCls: "bg-blue-900/40 text-blue-400",
   verb: "submitted",
-};
+} satisfies Pick<ActivityItem, "icon" | "iconCls" | "verb">;
 
 export function ActivityFeed({ tasks }: ActivityFeedProps) {
   const items: ActivityItem[] = tasks.slice(0, 6).map((task) => {
