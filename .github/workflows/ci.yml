@@ -182,6 +182,12 @@ jobs:
 
       - name: Start services
         run: |
+          # DEBUG: print effective env that api-server will see
+          echo "--- .env (sanitized) ---"
+          sed 's/=.*/=[REDACTED]/' .env 2>/dev/null | head -20
+          echo "--- compose env preview ---"
+          docker compose config api-server 2>&1 | sed -n '/environment:/,/^  [a-zA-Z]/p' | head -30
+          echo "--- starting services ---"
           docker compose up -d mongo redis api-server workers
           sleep 10
 
