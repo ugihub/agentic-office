@@ -11,6 +11,7 @@
  * POST   /tasks/:taskId/feedback
  */
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
+import { Types } from "mongoose";
 import {
   CreateTaskRequestSchema,
   TaskDecisionRequestSchema,
@@ -75,47 +76,91 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
         "Task submitted",
       );
 
-      // Create task envelope
+      // Resolve max cost up front — used both for envelope defaults and
+      // for the validation error path below.
       const maxCostUsd = body.constraints?.maxCostUsd ?? "0.50";
 
-      await TaskEnvelopeModel.create({
-        taskId,
-        tenantId: auth.tenantId,
-        userId: auth.userId,
-        submittedAt: new Date(),
-        completedAt: null,
-        currentStage: "Submitted",
-        stageVersion: 0,
-        executionPath,
-        originalRequest: {
-          prompt: body.prompt,
-          constraints: {
-            maxCostUsd,
-            maxLatencyMs: body.constraints?.maxLatencyMs ?? 30000,
-            preferredModelTier:
-              body.constraints?.preferredModelTier ?? "standard",
+      // Create task envelope. Catch E11000 to handle the Idempotency-Key
+      // race (BUG-6): two concurrent requests with the same key both pass
+      // the pre-check `findOne` above, but only one insert wins. The loser
+      // collides on the {idempotencyKey, tenantId} unique index and would
+      // otherwise surface as a 500. Return the winner's envelope instead.
+      try {
+        await TaskEnvelopeModel.create({
+          taskId,
+          tenantId: auth.tenantId,
+          userId: auth.userId,
+          submittedAt: new Date(),
+          completedAt: null,
+          currentStage: "Submitted",
+          stageVersion: 0,
+          executionPath,
+          originalRequest: {
+            prompt: body.prompt,
+            constraints: {
+              maxCostUsd,
+              maxLatencyMs: body.constraints?.maxLatencyMs ?? 30000,
+              preferredModelTier:
+                body.constraints?.preferredModelTier ?? "standard",
+            },
+            outputFormat: body.outputFormat,
+            metadata: body.metadata ?? {},
           },
-          outputFormat: body.outputFormat,
-          metadata: body.metadata ?? {},
-        },
-        routing: null,
-        budget: {
-          maxCostUsd,
-          reservedUsd: "0",
-          consumed: { tokensIn: 0, tokensOut: 0, costUsd: "0" },
-          reservations: [],
-        },
-        pendingDecision: null,
-        intermediateOutputs: { research: null, production: null, qa: null },
-        finalOutput: null,
-        outputQuality: null,
-        stateTransitions: [],
-        retryCount: { production: 0, qa: 0 },
-        cancellationRequested: false,
-        idempotencyKey:
-          typeof idempotencyKey === "string" ? idempotencyKey : null,
-        schemaVersion: "v1",
-      });
+          routing: null,
+          budget: {
+            maxCostUsd,
+            reservedUsd: "0",
+            consumed: { tokensIn: 0, tokensOut: 0, costUsd: "0" },
+            reservations: [],
+          },
+          pendingDecision: null,
+          intermediateOutputs: { research: null, production: null, qa: null },
+          finalOutput: null,
+          outputQuality: null,
+          stateTransitions: [],
+          retryCount: { production: 0, qa: 0 },
+          cancellationRequested: false,
+          idempotencyKey:
+            typeof idempotencyKey === "string" ? idempotencyKey : null,
+          schemaVersion: "v1",
+        });
+      } catch (err) {
+        const e = err as { code?: number; name?: string };
+        const isDuplicateKey =
+          e?.name === "MongoServerError" && e?.code === 11000;
+
+        if (
+          isDuplicateKey &&
+          typeof idempotencyKey === "string" &&
+          idempotencyKey.length > 0
+        ) {
+          // Another concurrent request won the race. Fetch the winner's
+          // task and return it with the same idempotent shape we use on
+          // the pre-check path.
+          const winner = await TaskEnvelopeModel.findOne({
+            idempotencyKey,
+            tenantId: auth.tenantId,
+          })
+            .select("taskId currentStage")
+            .lean()
+            .exec();
+
+          if (winner !== null) {
+            log.info(
+              { taskId: winner.taskId, idempotencyKey },
+              "Idempotency-Key race resolved — returning winner",
+            );
+            return reply.status(200).send({
+              taskId: winner.taskId,
+              currentStage: winner.currentStage,
+              idempotent: true,
+            });
+          }
+          // Fall through to a generic conflict if the winner somehow
+          // vanished between insert and re-read.
+        }
+        throw err;
+      }
 
       // Dispatch to CEO queue via outbox pattern (guarantees at-least-once delivery)
       const correlationId = newId(EntityPrefix.CORRELATION);
@@ -304,97 +349,146 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
         "X-Accel-Buffering": "no",
       });
 
-      // Send initial status
-      const sendEvent = (eventType: string, data: unknown): void => {
-        reply.raw.write(
-          `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`,
-        );
+      // Track stream lifetime so we never write/end after close
+      // (BUG-3: overlapping async interval callbacks + double .end()).
+      let closed = false;
+      const safeEnd = (): void => {
+        if (closed) return;
+        closed = true;
+        try {
+          if (!reply.raw.writableEnded) reply.raw.end();
+        } catch {
+          /* socket already gone */
+        }
+      };
+      const safeWrite = (eventType: string, data: unknown): boolean => {
+        if (closed || reply.raw.writableEnded) return false;
+        try {
+          return reply.raw.write(
+            `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`,
+          );
+        } catch {
+          closed = true;
+          return false;
+        }
       };
 
-      sendEvent("connected", { taskId, currentStage: task.currentStage });
+      // Send initial status
+      safeWrite("connected", { taskId, currentStage: task.currentStage });
 
-      // Poll for updates (simplified — production would use MongoDB change streams)
+      // Poll for updates (simplified — production would use MongoDB change streams).
+      // Re-entrancy guard: a single findOne in flight at a time. If a query
+      // takes longer than the interval, we skip the next tick instead of
+      // stacking overlapping queries (which caused ERR_STREAM_WRITE_AFTER_END).
       let lastStageVersion = -1;
-      let lastStage: string = task.currentStage;
-      const poll = setInterval(async () => {
-        const current = await TaskEnvelopeModel.findOne({
-          taskId,
-          tenantId: auth.tenantId,
-        })
-          .select(
-            "currentStage stageVersion pendingDecision finalOutput outputQuality budget.consumed.costUsd intermediateOutputs.qa retryCount",
-          )
-          .lean()
-          .exec();
+      let lastStage = task.currentStage as string;
+      let polling = false;
+      let poll: ReturnType<typeof setInterval> | null = null;
 
-        if (current === null) {
-          clearInterval(poll);
-          reply.raw.end();
-          return;
-        }
+      const tick = async (): Promise<void> => {
+        if (closed || polling) return;
+        polling = true;
+        try {
+          const current = await TaskEnvelopeModel.findOne({
+            taskId,
+            tenantId: auth.tenantId,
+          })
+            .select(
+              "currentStage stageVersion pendingDecision finalOutput outputQuality budget.consumed.costUsd intermediateOutputs.qa retryCount",
+            )
+            .lean()
+            .exec();
 
-        if (current.stageVersion !== lastStageVersion) {
-          const prevStage = lastStage;
-          lastStageVersion = current.stageVersion;
-          lastStage = current.currentStage;
-          const at = new Date().toISOString();
-
-          if (current.currentStage === "AwaitingUserDecision") {
-            sendEvent("decision_required", {
-              taskId,
-              pendingDecision: current.pendingDecision,
-            });
-          } else if (current.currentStage === "Completed") {
-            sendEvent("task.completed", {
-              taskId,
-              output: current.finalOutput,
-              outputQuality: current.outputQuality,
-              costUsd: String(
-                (
-                  current.budget as {
-                    consumed: { costUsd: { toString(): string } };
-                  }
-                ).consumed.costUsd,
-              ),
-            });
-            clearInterval(poll);
-            reply.raw.end();
-          } else if (current.currentStage === "Failed") {
-            const qaOutput = current.intermediateOutputs?.qa as
-              | { failureReason?: string }
-              | null
-              | undefined;
-            sendEvent("task.failed", {
-              taskId,
-              reason: qaOutput?.failureReason ?? "Task failed",
-              attempts:
-                (current.retryCount as { production: number }).production + 1,
-            });
-            clearInterval(poll);
-            reply.raw.end();
-          } else if (current.currentStage === "Cancelled") {
-            sendEvent("task.cancelled", { taskId });
-            clearInterval(poll);
-            reply.raw.end();
-          } else {
-            sendEvent("task.stage.changed", {
-              taskId,
-              from: prevStage,
-              to: current.currentStage,
-              at,
-            });
+          if (current === null) {
+            // Task deleted — close the stream cleanly.
+            if (poll !== null) clearInterval(poll);
+            safeEnd();
+            return;
           }
+
+          if (current.stageVersion !== lastStageVersion) {
+            const prevStage = lastStage;
+            lastStageVersion = current.stageVersion;
+            lastStage = current.currentStage as string;
+            const at = new Date().toISOString();
+
+            if (current.currentStage === "AwaitingUserDecision") {
+              safeWrite("decision_required", {
+                taskId,
+                pendingDecision: current.pendingDecision,
+              });
+            } else if (current.currentStage === "Completed") {
+              safeWrite("task.completed", {
+                taskId,
+                output: current.finalOutput,
+                outputQuality: current.outputQuality,
+                costUsd: String(
+                  (
+                    current.budget as {
+                      consumed: { costUsd: { toString(): string } };
+                    }
+                  ).consumed.costUsd,
+                ),
+              });
+              if (poll !== null) clearInterval(poll);
+              safeEnd();
+              return;
+            } else if (current.currentStage === "Failed") {
+              const qaOutput = current.intermediateOutputs?.qa as
+                | { failureReason?: string }
+                | null
+                | undefined;
+              safeWrite("task.failed", {
+                taskId,
+                reason: qaOutput?.failureReason ?? "Task failed",
+                attempts:
+                  (current.retryCount as { production: number }).production + 1,
+              });
+              if (poll !== null) clearInterval(poll);
+              safeEnd();
+              return;
+            } else if (current.currentStage === "Cancelled") {
+              safeWrite("task.cancelled", { taskId });
+              if (poll !== null) clearInterval(poll);
+              safeEnd();
+              return;
+            } else {
+              safeWrite("task.stage.changed", {
+                taskId,
+                from: prevStage,
+                to: current.currentStage,
+                at,
+              });
+            }
+          }
+        } catch (err) {
+          // Query failure must not crash the timer loop or leave the
+          // re-entrancy flag stuck. Log and let the next tick retry.
+          log.warn(
+            { taskId, err: err instanceof Error ? err.message : String(err) },
+            "SSE poll failed",
+          );
+        } finally {
+          polling = false;
         }
+      };
+
+      poll = setInterval(() => {
+        void tick();
       }, 1000);
 
       // Cleanup on disconnect
       request.raw.on("close", () => {
-        clearInterval(poll);
+        closed = true;
+        if (poll !== null) clearInterval(poll);
       });
 
-      // Keep connection alive
+      // Keep the request handler alive until the client disconnects.
       await new Promise<void>((resolve) => {
-        request.raw.on("close", resolve);
+        request.raw.on("close", () => {
+          safeEnd();
+          resolve();
+        });
       });
     },
   );
@@ -407,13 +501,27 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
       requirePermission(auth, "task:write", reply);
       const { taskId } = request.params as { taskId: string };
 
+      // Capture the current (non-terminal) stage before mutation so the
+      // audit trail records a valid source stage instead of "unknown".
+      const beforeCancel = await TaskEnvelopeModel.findOne({
+        taskId,
+        tenantId: auth.tenantId,
+        currentStage: { $nin: ["Completed", "Failed", "Cancelled"] },
+      })
+        .select("currentStage")
+        .lean()
+        .exec();
+
+      const fromStage: string =
+        beforeCancel === null ? "Submitted" : beforeCancel.currentStage;
+
       const result = await TaskEnvelopeModel.findOneAndUpdate(
         {
           taskId,
           tenantId: auth.tenantId,
-          currentStage: {
-            $nin: ["Completed", "Failed", "Cancelled"],
-          },
+          ...(beforeCancel !== null
+            ? { currentStage: beforeCancel.currentStage }
+            : {}),
         },
         {
           $set: {
@@ -423,7 +531,7 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
           $inc: { stageVersion: 1 },
           $push: {
             stateTransitions: {
-              from: "unknown",
+              from: fromStage,
               to: "Cancelled",
               at: new Date(),
               byAgent: "user",
@@ -461,7 +569,7 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { action } = parsed.data;
+      const { action, additionalBudgetUsd } = parsed.data;
 
       // Verify task is in AwaitingUserDecision
       const task = await TaskEnvelopeModel.findOne({
@@ -492,6 +600,46 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // BUG-1 / DAT-01: "add_budget" must actually raise the budget.
+      // Previously this action only reset the stage back to "Submitted"
+      // without touching budget.maxCostUsd — the worker would re-reserve
+      // with the same funds, fail again, and loop / dead-end.
+      // Validate the additional amount and compute a Decimal128 increment
+      // so the money path stays on Decimal128 (no `as unknown as number`).
+      let budgetInc: { maxCostUsd: unknown; reservedUsd: unknown } | null =
+        null;
+      if (action === "add_budget") {
+        const amountStr =
+          additionalBudgetUsd ??
+          // Fall back to the escalation cost the task was waiting on, if any.
+          (
+            task.pendingDecision as {
+              escalationOption?: { additionalCostUsd?: { toString(): string } };
+            } | null
+          )?.escalationOption?.additionalCostUsd?.toString();
+
+        if (amountStr === undefined || amountStr === null || amountStr === "") {
+          return reply.status(400).send({
+            error: "VALIDATION_ERROR",
+            message:
+              "additionalBudgetUsd is required when action is add_budget",
+          });
+        }
+
+        // DecimalStringSchema already validated format, but reject zero to
+        // avoid a no-op loop back into AwaitingUserDecision.
+        const parsedAmount = Number.parseFloat(amountStr);
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+          return reply.status(400).send({
+            error: "VALIDATION_ERROR",
+            message: "additionalBudgetUsd must be a positive amount",
+          });
+        }
+
+        const inc = Types.Decimal128.fromString(amountStr);
+        budgetInc = { maxCostUsd: inc, reservedUsd: inc };
+      }
+
       // Apply decision
       const newStage =
         action === "cancel"
@@ -515,7 +663,17 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
               ? { outputQuality: "best_effort" }
               : {}),
           },
-          $inc: { stageVersion: 1 },
+          // Only raise the ceiling on add_budget — leave other actions'
+          // money fields untouched. Decimal128-safe increment.
+          ...(budgetInc !== null
+            ? {
+                $inc: {
+                  stageVersion: 1,
+                  "budget.maxCostUsd": budgetInc.maxCostUsd,
+                  "budget.reservedUsd": budgetInc.reservedUsd,
+                },
+              }
+            : { $inc: { stageVersion: 1 } }),
           $push: {
             stateTransitions: {
               from: "AwaitingUserDecision",
@@ -533,7 +691,10 @@ export const taskRoutes: FastifyPluginAsync = async (fastify) => {
           targetQueue: QUEUE_NAMES.CEO,
           jobName: "ResumeTaskCommand",
           jobData: {
-            _type: "SubmitTaskCommand",
+            // BUG-11: discriminator must match jobName so a future
+            // switch-on-_type handler dispatches the resume path
+            // correctly instead of treating it as a fresh submission.
+            _type: "ResumeTaskCommand",
             taskId,
             tenantId: auth.tenantId,
             userId: auth.userId,

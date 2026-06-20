@@ -12,6 +12,9 @@
  */
 import mongoose from "mongoose";
 import { TaskEnvelopeModel } from "@bureau/models";
+import { createOutboxEntry } from "@bureau/infra-mongo";
+import { QUEUE_NAMES } from "@bureau/contracts";
+import { newId, EntityPrefix } from "@bureau/shared-kernel";
 import { createLogger } from "@bureau/telemetry";
 import { sendDecisionRequiredEmail } from "./email.js";
 
@@ -67,14 +70,34 @@ async function sendPendingNotifications(): Promise<void> {
 
       if (claimed === null) return; // Another instance claimed it
 
-      // Resolve recipient — use NOTIFICATION_EMAIL env var as fallback for MVP
-      // In production, this would lookup user email from a user profile service
-      const recipientEmail =
-        process.env["NOTIFICATION_EMAIL"] ?? process.env["ADMIN_EMAIL"];
+      // BUG-20: cross-tenant email leak. Previously every tenant's
+      // decision-timeout email went to one shared inbox (the first
+      // NOTIFICATION_EMAIL/ADMIN_EMAIL), letting one operator see every
+      // tenant's prompts and task IDs. In MVP there is no UserProfile
+      // collection, so we cannot resolve a per-tenant recipient.
+      // Until that lands, only allow notifications for the explicitly
+      // opted-in tenant (BUREAU_DECISION_NOTIFY_TENANT) — and route the
+      // email through a per-tenant override (BUREAU_DECISION_NOTIFY_<TENANT>)
+      // so multiple opt-in tenants do not collide on a single address.
+      const isOptInTenant =
+        process.env["BUREAU_DECISION_NOTIFY_TENANT"] === task.tenantId;
+      if (!isOptInTenant) {
+        log.warn(
+          {
+            taskId: task.taskId,
+            tenantId: task.tenantId,
+          },
+          "Tenant not opted in for decision notifications — email skipped (notifiedAt still marked). Set BUREAU_DECISION_NOTIFY_TENANT to opt this tenant in.",
+        );
+        return;
+      }
+
+      const envKey = `BUREAU_DECISION_NOTIFY_${task.tenantId.toUpperCase().replace(/[^A-Z0-9_]/g, "_")}`;
+      const recipientEmail = process.env[envKey];
       if (!recipientEmail) {
         log.warn(
-          { taskId: task.taskId },
-          "No NOTIFICATION_EMAIL configured — decision email skipped (notifiedAt still marked)",
+          { taskId: task.taskId, envKey },
+          "Tenant opted in but no per-tenant recipient configured — decision email skipped (notifiedAt still marked)",
         );
         return;
       }
@@ -132,7 +155,7 @@ async function processExpiredDecisions(): Promise<void> {
     currentStage: "AwaitingUserDecision",
     "pendingDecision.expiresAt": { $lte: now },
   })
-    .select("taskId pendingDecision")
+    .select("taskId tenantId userId pendingDecision")
     .limit(BATCH_LIMIT)
     .lean()
     .exec();
@@ -185,6 +208,48 @@ async function processExpiredDecisions(): Promise<void> {
           { taskId: task.taskId, action, newStage },
           "Decision auto-executed on timeout",
         );
+
+        // BUG-2: previously the worker only mutated the stage. For non-cancel
+        // actions the task is now in a non-terminal stage (Submitted for
+        // add_budget, Formatting for best_effort) but nothing re-enters the
+        // pipeline → the task was stuck forever. Re-dispatch via outbox so
+        // the task processor resumes it (mirrors the /tasks/:id/decision
+        // route handler in api-server).
+        if (action !== "cancel") {
+          const correlationId = newId(EntityPrefix.CORRELATION);
+          const outboxResult = await createOutboxEntry({
+            targetQueue: QUEUE_NAMES.CEO,
+            jobName: "ResumeTaskCommand",
+            jobData: {
+              _type: "SubmitTaskCommand",
+              taskId: task.taskId,
+              tenantId: task.tenantId,
+              userId: task.userId,
+              correlationId,
+              header: {
+                correlationId,
+                causationId: null,
+                traceparent: null,
+                schemaVersion: "v1",
+              },
+            },
+            correlationId,
+          });
+
+          if (!outboxResult.ok) {
+            // The stage is already transitioned; log loudly so on-call can
+            // re-dispatch manually. We do NOT roll back — the user-facing
+            // default action is what matters and is recorded.
+            log.error(
+              {
+                taskId: task.taskId,
+                action,
+                err: outboxResult.error.message,
+              },
+              "Decision timeout: stage transitioned but resume outbox entry failed",
+            );
+          }
+        }
       }
       // If null: another instance claimed it first — safe to ignore
     }),

@@ -71,7 +71,7 @@ const OriginalRequestSchema = z
       })
       .strip(),
     outputFormat: z.enum(["markdown", "json", "text", "html"]),
-    metadata: z.record(z.unknown()).default({}),
+    metadata: z.record(z.string(), z.unknown()).default({}),
   })
   .strip();
 
@@ -194,7 +194,7 @@ export const CreateTaskRequestSchema = z
     outputFormat: z
       .enum(["markdown", "json", "text", "html"])
       .default("markdown"),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .strip();
 
@@ -204,6 +204,10 @@ export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>;
 export const TaskDecisionRequestSchema = z
   .object({
     action: z.enum(["best_effort", "add_budget", "cancel"]),
+    // Additional budget to add when action === "add_budget".
+    // Positive decimal string (e.g. "0.50"). Required only for add_budget;
+    // ignored for best_effort/cancel.
+    additionalBudgetUsd: DecimalStringSchema.optional(),
   })
   .strip();
 

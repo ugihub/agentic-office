@@ -108,6 +108,13 @@ async function markFailed(
   correlationId: string,
   reason: string,
 ): Promise<void> {
+  // Capture current stage to record valid source stage in audit trail (BUG-4)
+  const task = await TaskEnvelopeModel.findOne({ taskId, tenantId })
+    .select("currentStage")
+    .lean()
+    .exec();
+  const fromStage = task === null ? "Submitted" : task.currentStage;
+
   await TaskEnvelopeModel.updateOne(
     { taskId, tenantId },
     {
@@ -118,7 +125,7 @@ async function markFailed(
       $inc: { stageVersion: 1 },
       $push: {
         stateTransitions: {
-          from: "unknown",
+          from: fromStage,
           to: "Failed",
           at: new Date(),
           byAgent: "task-processor",
@@ -322,12 +329,88 @@ async function processTask(job: {
     return;
   }
 
+  // BUG-14: Concurrency / Requeue safety.
+  // Perform an atomic claim to transition from "Submitted" to "Preparing".
+  // If multiple instances receive the same job ID concurrently (e.g. BullMQ
+  // stalled job retry or concurrent outbox poll), only the winner of this
+  // findOneAndUpdate will proceed. The loser gets a null result and exits.
+  const claimed = await TaskEnvelopeModel.findOneAndUpdate(
+    {
+      taskId,
+      tenantId,
+      currentStage: "Submitted",
+    },
+    {
+      $set: { currentStage: "Preparing" },
+      $inc: { stageVersion: 1 },
+      $push: {
+        stateTransitions: {
+          from: "Submitted",
+          to: "Preparing",
+          at: new Date(),
+          byAgent: "task-processor",
+          correlationId,
+        },
+      },
+    },
+    { new: true },
+  ).exec();
+
+  if (claimed === null) {
+    jobLog.warn(
+      {},
+      "Failed to claim task atomatically — already processing by another worker. Idempotent skip.",
+    );
+    return;
+  }
+
   // ── 4. Setup context + AbortController ───────────────────────────────────────
   const ac = new AbortController();
   const prompt = task.originalRequest.prompt;
   const outputFormat = task.originalRequest.outputFormat;
   const maxCostUsd = task.originalRequest.constraints.maxCostUsd.toString();
   const executionPath = task.executionPath;
+
+  // BUG-5: cancel cost leak. Previously the cancel route only flipped
+  // the stage to "Cancelled" but the worker had no way to abort the
+  // in-flight LLM call — it kept running, tokens were burned, and cost
+  // was recorded for a task the user already gave up on. Wire up a
+  // lightweight watcher that aborts the in-process AbortController the
+  // moment we observe cancellationRequested=true. The chunk worker
+  // already forwards `signal` to `registry.generate(...)`, so this is
+  // enough to short-circuit the LLM provider. The watcher also
+  // self-cancels as soon as the AbortController fires for any reason
+  // (cancellation, process exit), so it never leaks.
+  const cancellationWatcher = setInterval(async () => {
+    try {
+      const fresh = await TaskEnvelopeModel.findOne({ taskId, tenantId })
+        .select("cancellationRequested currentStage")
+        .lean()
+        .exec();
+      if (
+        fresh !== null &&
+        (fresh.cancellationRequested === true ||
+          fresh.currentStage === "Cancelled")
+      ) {
+        jobLog.info(
+          { taskId },
+          "Cancellation observed — aborting in-flight LLM call",
+        );
+        ac.abort();
+      }
+    } catch {
+      // watcher is best-effort; do not throw out of the timer callback
+    }
+  }, 2000);
+  // Self-cleanup: any abort (cancellation OR process shutdown) tears
+  // the interval down so it never outlives the AbortController's scope.
+  ac.signal.addEventListener(
+    "abort",
+    () => clearInterval(cancellationWatcher),
+    {
+      once: true,
+    },
+  );
 
   const ctx: AgentContext & { prompt: string; maxCostUsd: string } = {
     taskId,
@@ -340,15 +423,6 @@ async function processTask(job: {
     maxCostUsd,
   };
 
-  // ── 5. Transition: Submitted → Preparing ─────────────────────────────────────
-  await transitionStage(
-    taskId,
-    tenantId,
-    "Submitted",
-    "Preparing",
-    "task-processor",
-    correlationId,
-  );
   jobLog.info({}, "Stage: Preparing");
 
   // ── 6. HR SSC: model selection + escalation chain ────────────────────────────
@@ -517,8 +591,17 @@ async function processTask(job: {
     },
   ).exec();
 
-  // ── 9. Research phase (full path) — simplified placeholder ───────────────────
+  // ── 9. Research phase (full path) — honest placeholder ─────────────────────
+  // BUG-13: the previous implementation echoed the prompt back as a
+  // "research summary", producing output that looked credible but
+  // contained no external evidence. The honest MVP behaviour is to
+  // (a) mark the task as having a stub research note, (b) cap the
+  // confidence at a value that signals it's an unverified stub, and
+  // (c) force the final outputQuality to "best_effort" so callers can
+  // detect the degraded path. A real WebSearchWorker would replace
+  // this block; until then, we tell the truth.
   let researchSummary: string | undefined;
+  let researchIsStub = false;
 
   if (executionPath === "full") {
     await transitionStage(
@@ -529,10 +612,19 @@ async function processTask(job: {
       "task-processor",
       correlationId,
     );
-    jobLog.info({}, "Stage: Researching (simplified placeholder)");
+    jobLog.warn(
+      {},
+      "Stage: Researching — STUB (no WebSearchWorker yet). " +
+        "Output will be flagged best_effort. " +
+        "See FEAT-02 in docs/AUDIT_PERBAIKAN.md.",
+    );
 
-    // MVP: store a minimal research note; full implementation would call WebSearchWorker
-    researchSummary = `Research context for: ${prompt.slice(0, 200)}`;
+    researchIsStub = true;
+    researchSummary =
+      "[research stub] no external sources consulted; downstream LLM " +
+      "should answer from its own knowledge only and clearly state " +
+      "uncertainties. Original prompt: " +
+      prompt.slice(0, 200);
     await TaskEnvelopeModel.updateOne(
       { taskId, tenantId },
       {
@@ -540,7 +632,10 @@ async function processTask(job: {
           "intermediateOutputs.research": {
             summary: researchSummary,
             sources: [],
-            confidence: 0.5,
+            // Confidence < 0.5 signals to downstream code (and future
+            // QA workers) that this is not real evidence.
+            confidence: 0.1,
+            isStub: true,
           },
         },
       },
@@ -840,8 +935,21 @@ async function processTask(job: {
   );
   jobLog.info({}, "Stage: Formatting (Marketing)");
 
-  const outputQuality: "standard" | "best_effort" =
-    qaPassedAt > 1 ? "best_effort" : "standard";
+  // Output quality labelling.
+  //   - researchIsStub          → best_effort (BUG-13: no real evidence)
+  //   - qaPassedAt === -1       → best_effort (BUG-15 fix: QA never passed,
+  //                                previously mislabelled as "standard"
+  //                                because the prior check was `> 1` and
+  //                                -1 silently fell into the "standard" arm)
+  //   - qaPassedAt > 1          → best_effort (at least one QA failure
+  //                                before pass; output was forced through
+  //                                the escalation chain)
+  //   - qaPassedAt === 1        → standard (clean first-try QA pass)
+  const outputQuality: "standard" | "best_effort" = researchIsStub
+    ? "best_effort"
+    : qaPassedAt === -1 || qaPassedAt > 1
+      ? "best_effort"
+      : "standard";
 
   const marketingInput: MarketingInput = {
     draft: productionDraft,
