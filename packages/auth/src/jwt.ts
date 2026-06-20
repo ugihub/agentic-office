@@ -12,8 +12,14 @@ import {
   importPKCS8,
   importSPKI,
   type JWTPayload,
-  type KeyLike,
 } from "jose";
+
+// jose v5 no longer publicly exports the `KeyLike` type. For this
+// Node.js service, the actual runtime type returned by importPKCS8 /
+// importSPKI is a Node `KeyObject`. (A web `CryptoKey` would require
+// adding `lib: ["dom"]` to tsconfig — overkill for a backend service
+// that never runs in a browser.)
+type JwtKey = Awaited<ReturnType<typeof importPKCS8>>;
 import { type Result, ok, err } from "@bureau/shared-kernel";
 import { UnauthorizedError } from "@bureau/shared-kernel";
 
@@ -35,10 +41,17 @@ export interface JwtSignOptions {
 export interface JwtVerifyOptions {
   issuer?: string;
   audience?: string;
+  /**
+   * Maximum acceptable age of the token in milliseconds, measured from
+   * the `iat` claim. Defaults to 1h, overridable via JWT_MAX_AGE_MS.
+   * Independent of `exp` — a token with `exp = +30d` is still rejected
+   * once it's older than `maxAge`. BUG-9 mitigation.
+   */
+  maxAge?: number;
 }
 
-let _privateKey: KeyLike | null = null;
-let _publicKey: KeyLike | null = null;
+let _privateKey: JwtKey | null = null;
+let _publicKey: JwtKey | null = null;
 
 /** Initialize JWT keys from PEM strings. Call at service startup. */
 export async function initJwtKeys(
@@ -95,6 +108,12 @@ export async function signJwt(
 /**
  * Verify a JWT token. Returns the decoded payload on success.
  * Returns UnauthorizedError on invalid/expired token.
+ *
+ * BUG-9 mitigation: we cap token age with `maxTokenAge` (default 1h,
+ * override via JWT_MAX_AGE_MS or per-call options) so a token with a
+ * long `exp` still cannot be replayed forever. This is a defence in
+ * depth measure — signers should still mint short-lived tokens — but
+ * it caps blast radius if a token leaks after issuance.
  */
 export async function verifyJwt(
   token: string,
@@ -107,10 +126,20 @@ export async function verifyJwt(
   try {
     const issuer =
       options.issuer ?? process.env["JWT_ISSUER"] ?? "https://auth.bureau.id";
+    const envMaxAge = process.env["JWT_MAX_AGE_MS"];
+    const maxAge =
+      options.maxAge ??
+      (envMaxAge !== undefined && envMaxAge !== ""
+        ? Number.parseInt(envMaxAge, 10)
+        : 60 * 60 * 1000); // 1h default
 
     const { payload } = await jwtVerify(token, _publicKey, {
       issuer,
       algorithms: ["RS256"],
+      // If the token is older than maxAge, reject — independent of `exp`.
+      // jose throws JWTExpired if `iat + maxAge < now`.
+      ...(Number.isFinite(maxAge) && maxAge > 0 ? { maxTokenAge: maxAge } : {}),
+      clockTolerance: 0,
     });
 
     if (

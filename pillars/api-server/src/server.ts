@@ -25,6 +25,7 @@ import authPlugin from "./middleware/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { taskRoutes } from "./routes/tasks.js";
 import { authKeyRoutes } from "./routes/auth-keys.js";
+import { getJwtPemEnv } from "./server-env.js";
 
 const log = createLogger({ division: "Executive" });
 
@@ -78,15 +79,45 @@ export async function buildServer() {
     skipOnError: true,
     keyGenerator: (request) => {
       const apiKey = request.headers["x-api-key"];
-      if (typeof apiKey === "string") return `apikey:${apiKey.slice(0, 16)}`;
-      return request.ip;
+      // BUG-8: previously used `apiKey.slice(0, 16)` as the bucket key.
+      // Two problems:
+      //   1. The first 16 chars of an API key are a stable, identifiable
+      //      fingerprint — storing it in the rate-limit store (typically
+      //      Redis) leaks tenant identity to anyone with read access.
+      //   2. An attacker can flood with crafted keys whose first 16 chars
+      //      collide with a victim's prefix to exhaust the victim's
+      //      quota, OR send unique-looking keys to dodge the limit
+      //      entirely (each request creates a new bucket).
+      // Fix: hash the full key with SHA-256 so the bucket is keyed by a
+      // non-reversible, high-entropy digest. Reject obviously malformed
+      // keys by routing them to the IP bucket (prevents the dodge
+      // attack) — they will still be rejected by auth downstream, but
+      // rate limiting applies first.
+      if (typeof apiKey === "string" && apiKey.length > 0) {
+        const looksValid = /^bureau_(live|test)_[A-Za-z0-9_-]+$/.test(apiKey);
+        if (!looksValid) return `ip:${request.ip}`;
+        const { createHash } =
+          require("node:crypto") as typeof import("node:crypto");
+        const digest = createHash("sha256")
+          .update(apiKey)
+          .digest("hex")
+          .slice(0, 32);
+        return `apikey:${digest}`;
+      }
+      return `ip:${request.ip}`;
     },
   });
 
   // Auth plugin — populates req.authContext
   await fastify.register(authPlugin);
 
-  // Routes — health first (no auth required)
+  // Routes — health first (no auth required).
+  // BUG-18: routes are intentionally registered TWICE — once at root
+  // and once under /api/v1 — to support both legacy callers and
+  // versioned API clients without breaking either. The duplication
+  // is documented here so future maintainers do not "fix" it.
+  // If you need to drop one, ensure no caller in the wild depends
+  // on the dropped prefix (check dashboards, mcp-server, scripts).
   await fastify.register(healthRoutes);
   await fastify.register(taskRoutes);
   await fastify.register(authKeyRoutes);
@@ -138,15 +169,9 @@ async function connectMongo(): Promise<void> {
 // ─── JWT key initialization ───────────────────────────────────────────────────
 
 async function initAuth(): Promise<void> {
-  const privateKeyPem = process.env["JWT_PRIVATE_KEY_PEM"] ?? "";
-  const publicKeyPem = process.env["JWT_PUBLIC_KEY_PEM"] ?? "";
+  const { privateKeyPem, publicKeyPem } = getJwtPemEnv();
 
   if (privateKeyPem === "" || publicKeyPem === "") {
-    if (process.env["NODE_ENV"] === "production") {
-      throw new Error(
-        "JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM required in production",
-      );
-    }
     log.warn(
       {},
       "JWT keys not configured — auth will fail for JWT tokens (dev mode)",

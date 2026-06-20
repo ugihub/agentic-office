@@ -10,7 +10,8 @@
  */
 import type { FastifyRequest, FastifyReply, FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
-import { verifyJwt } from "@bureau/auth";
+import { timingSafeEqual } from "node:crypto";
+import { verifyJwt, isValidApiKeyFormat } from "@bureau/auth";
 import { hashApiKey } from "@bureau/auth";
 import { ApiKeyModel } from "@bureau/models";
 import { createLogger } from "@bureau/telemetry";
@@ -34,10 +35,28 @@ const log = createLogger({ division: "ITSSC" });
  * Super-key bypass: if BUREAU_SUPER_KEY env var is set and the provided key
  * matches, grant all permissions without a DB lookup.
  * Intended for initial bootstrap when no API keys exist yet.
+ *
+ * BUG-7: previously used `plaintext !== superKey`, leaking match length via
+ * short-circuit comparison. Now uses crypto.timingSafeEqual so the compare
+ * time is independent of the input.
  */
-function checkSuperKey(plaintext: string): AuthContext | null {
+export function checkSuperKey(plaintext: string): AuthContext | null {
+  if (process.env["NODE_ENV"] === "production") return null;
   const superKey = process.env["BUREAU_SUPER_KEY"];
-  if (!superKey || superKey.length < 16 || plaintext !== superKey) return null;
+  if (!superKey || superKey.length < 32) return null;
+  if (plaintext.length !== superKey.length) return null;
+
+  // Constant-time compare: buffers must be equal length (checked above).
+  const a = Buffer.from(plaintext, "utf8");
+  const b = Buffer.from(superKey, "utf8");
+  if (!timingSafeEqual(a, b)) return null;
+
+  // Audit every use so misuse leaves a trace in logs.
+  log.warn(
+    { event: "super_key_used" },
+    "BUREAU_SUPER_KEY bypass used — bootstrap access",
+  );
+
   return {
     tenantId: "tenant_super",
     userId: "user_super",
@@ -47,6 +66,7 @@ function checkSuperKey(plaintext: string): AuthContext | null {
       "keys:read",
       "keys:write",
       "provider-keys:write",
+      "provider-keys:read",
     ],
     authMethod: "api_key",
   };
@@ -57,6 +77,12 @@ function checkSuperKey(plaintext: string): AuthContext | null {
  * Returns null if not found or revoked.
  */
 async function lookupApiKey(plaintext: string): Promise<AuthContext | null> {
+  // BUG-16: validate format BEFORE hashing/DB. This closes a timing oracle
+  // (valid-format-but-not-found hits the DB; invalid-format-but-not-found
+  // would have skipped the DB) and avoids spending SHA-256 + Mongo roundtrip
+  // on every garbage header a script kid throws at us.
+  if (!isValidApiKeyFormat(plaintext)) return null;
+
   const hash = hashApiKey(plaintext);
 
   const key = await ApiKeyModel.findOne({
