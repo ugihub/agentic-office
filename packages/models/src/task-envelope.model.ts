@@ -216,7 +216,7 @@ const taskEnvelopeSchema = new Schema<TaskEnvelopeDocument>(
   },
   {
     strict: true,
-    timestamps: { updatedAt: true, createdAt: false },
+    timestamps: { updatedAt: true, createdAt: true },
     collection: "task_envelopes",
   },
 );

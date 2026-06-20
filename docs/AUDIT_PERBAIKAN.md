@@ -23,28 +23,28 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 
 ## Ringkasan Prioritas
 
-| ID | Judul | Prioritas | Effort | Area |
-|----|-------|-----------|--------|------|
-| SEC-01 | Purge private key JWT dari git history + rotasi | P0 | Medium | Security |
-| SEC-02 | Rotasi encryption key & provider key yang bocor di `.env` | P0 | Small | Security |
-| SEC-03 | Hardening `BUREAU_SUPER_KEY` (backdoor) | P0 | Small | Security |
-| AIS-01 | Instruction hierarchy (pisah system vs data user) | P0 | Medium | AI Safety |
-| AIS-02 | Moderation injection/toxicity berbasis model | P0 | Large | AI Safety |
-| AIS-03 | PII redaction (input ke LLM + sebelum simpan) | P0 | Large | Privacy |
-| AIS-04 | Output guard (moderation output sebelum delivery) | P0 | Medium | AI Safety |
-| DAT-01 | Perbaiki `$inc` Decimal128 pada `add_budget` | P0 | Small | Data Integrity |
-| OPS-01 | Verifikasi build Docker + smoke E2E di CI | P0 | Medium | DevOps |
-| FEAT-01 | Selaraskan klaim fitur dengan kapabilitas nyata | P1 | Medium | Product |
-| FEAT-02 | Implement Research nyata atau turunkan klaim | P1 | Large | Agentic |
-| OBS-01 | Persist `audit_trail` / `agent_executions` runtime | P1 | Medium | Observability |
-| UI-01 | Pindahkan API key dari `localStorage` | P1 | Medium | UI/Security |
-| API-01 | Standardisasi error envelope + `requestId` + OpenAPI | P1 | Medium | API |
-| TEST-01 | Adversarial injection & output-safety test suite | P1 | Medium | Testing |
-| PERF-01 | SSE → MongoDB Change Streams | P2 | Medium | Performance |
-| PERF-02 | Wire semantic cache ke production path | P2 | Medium | Performance/Cost |
-| ARCH-01 | Kurangi cast `as unknown as` pada jalur uang | P2 | Medium | Code Quality |
-| ARCH-02 | Multi-instance decision worker (leader election) | P2 | Large | Reliability |
-| PRIV-01 | Data retention/TTL + DPA provider LLM | P2 | Medium | Compliance |
+| ID      | Judul                                                     | Prioritas | Effort | Area             |
+| ------- | --------------------------------------------------------- | --------- | ------ | ---------------- |
+| SEC-01  | Purge private key JWT dari git history + rotasi           | P0        | Medium | Security         |
+| SEC-02  | Rotasi encryption key & provider key yang bocor di `.env` | P0        | Small  | Security         |
+| SEC-03  | Hardening `BUREAU_SUPER_KEY` (backdoor)                   | P0        | Small  | Security         |
+| AIS-01  | Instruction hierarchy (pisah system vs data user)         | P0        | Medium | AI Safety        |
+| AIS-02  | Moderation injection/toxicity berbasis model              | P0        | Large  | AI Safety        |
+| AIS-03  | PII redaction (input ke LLM + sebelum simpan)             | P0        | Large  | Privacy          |
+| AIS-04  | Output guard (moderation output sebelum delivery)         | P0        | Medium | AI Safety        |
+| DAT-01  | Perbaiki `$inc` Decimal128 pada `add_budget`              | P0        | Small  | Data Integrity   |
+| OPS-01  | Verifikasi build Docker + smoke E2E di CI                 | P0        | Medium | DevOps           |
+| FEAT-01 | Selaraskan klaim fitur dengan kapabilitas nyata           | P1        | Medium | Product          |
+| FEAT-02 | Implement Research nyata atau turunkan klaim              | P1        | Large  | Agentic          |
+| OBS-01  | Persist `audit_trail` / `agent_executions` runtime        | P1        | Medium | Observability    |
+| UI-01   | Pindahkan API key dari `localStorage`                     | P1        | Medium | UI/Security      |
+| API-01  | Standardisasi error envelope + `requestId` + OpenAPI      | P1        | Medium | API              |
+| TEST-01 | Adversarial injection & output-safety test suite          | P1        | Medium | Testing          |
+| PERF-01 | SSE → MongoDB Change Streams                              | P2        | Medium | Performance      |
+| PERF-02 | Wire semantic cache ke production path                    | P2        | Medium | Performance/Cost |
+| ARCH-01 | Kurangi cast `as unknown as` pada jalur uang              | P2        | Medium | Code Quality     |
+| ARCH-02 | Multi-instance decision worker (leader election)          | P2        | Large  | Reliability      |
+| PRIV-01 | Data retention/TTL + DPA provider LLM                     | P2        | Medium | Compliance       |
 
 ---
 
@@ -69,6 +69,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
    ```
 2. Simpan key baru **hanya** di Doppler/Vault (jangan di repo). Update `JWT_PRIVATE_KEY_PEM` / `JWT_PUBLIC_KEY_PEM`.
 3. Purge history (pilih salah satu):
+
    ```bash
    # Opsi A: git filter-repo (disarankan)
    git filter-repo --path secrets/jwt-private.pem --path secrets/jwt-public.pem --invert-paths
@@ -77,10 +78,12 @@ Centang `[ ]` menjadi `[x]` saat selesai.
    bfg --delete-files "jwt-*.pem"
    git reflog expire --expire=now --all && git gc --prune=now --aggressive
    ```
+
 4. Force-push ke remote setelah koordinasi tim (history rewrite). Invalidasi semua token JWT lama (rotasi issuer/kid bila ada).
 5. Tambahkan secret scanning yang melindungi history (lihat OPS-01) — mis. `gitleaks`.
 
 **DoD.**
+
 - [ ] Key lama tidak lagi muncul di `git log -p` / `git rev-list --all`
 - [ ] Service prod memakai key baru dari secret manager
 - [ ] Token yang ditandatangani key lama ditolak
@@ -94,6 +97,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 - **File terkait:** `.env`, Doppler, `packages/auth/src/apikey.ts`
 
 **Masalah.** `.env` di working tree berisi nilai asli:
+
 - `API_KEY_ENCRYPTION_KEY` (dipakai untuk AES-256-GCM provider key tenant) — jika nilai ini dipakai di prod dan bocor, **semua provider key tenant dapat didekripsi**.
 - `MISTRAL_API_KEY` asli — risiko abuse biaya.
 
@@ -109,6 +113,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 4. Pastikan `.env` lokal tidak pernah berisi nilai prod. Gunakan placeholder seperti `.env.example`.
 
 **DoD.**
+
 - [ ] Mistral key lama di-revoke
 - [ ] Encryption key prod baru hanya di secret manager
 - [ ] Strategi migrasi provider key terdefinisi & teruji
@@ -138,14 +143,17 @@ Centang `[ ]` menjadi `[x]` saat selesai.
      if (!crypto.timingSafeEqual(a, b)) return null;
      // audit wajib
      log.warn({ event: "super_key_used" }, "BUREAU_SUPER_KEY bypass used");
-     return { /* ... */ };
+     return {
+       /* ... */
+     };
    }
    ```
 2. Jika bootstrap prod tetap perlu super-key: batasi sekali pakai (mis. auto-expire setelah API key pertama dibuat), wajib audit, panjang minimal 32 char.
 
 **DoD.**
+
 - [x] Super-key tidak aktif di `NODE_ENV=production` (atau bootstrap-only + audit)
-- [x] Constant-time comparison (`crypto.timingSafeEqual`)
+- [x] Constant-time comparison (`crypto.timingSafeEqual`) — FIXED in commit df6934c (audit remediation 2026-06-20)
 - [x] Setiap penggunaan tercatat di log/audit
 
 ---
@@ -171,6 +179,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 3. Tandai data tak tepercaya dengan delimiter yang jelas dan instruksikan model memperlakukannya sebagai data, bukan perintah.
 
 **DoD.**
+
 - [ ] `system` prompt terpisah dari konten user di semua LLM call
 - [ ] Ada aturan eksplisit anti-injection & anti-fabrikasi
 - [ ] Test: konten berisi "ignore previous instructions" tidak mengubah perilaku
@@ -192,6 +201,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 4. Jadikan severity & tindakan terkonfigurasi (block / flag / require human review).
 
 **DoD.**
+
 - [ ] Moderation berbasis model aktif untuk path standard/full
 - [ ] Lolos suite adversarial TEST-01
 - [ ] Konten eksternal juga divalidasi sebelum dimasukkan ke prompt
@@ -215,6 +225,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 3. Lihat PRIV-01 untuk retention.
 
 **DoD.**
+
 - [ ] PII tidak tersimpan plaintext di DB (redaksi/enkripsi)
 - [ ] Log tidak memuat PII/prompt mentah
 - [ ] Test PII redaction lulus
@@ -235,6 +246,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 3. Jika output gagal output-safety, jangan kirim — masuk ke Failed/AwaitingUserDecision dengan alasan jelas.
 
 **DoD.**
+
 - [ ] `finalOutput` melewati output moderation + PII scan
 - [ ] Output berbahaya tidak terkirim ke user
 - [ ] Status QA (heuristik vs LLM) didokumentasikan jujur
@@ -254,12 +266,15 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 2. Konversi nilai ke Decimal128 string sebelum `$inc`:
    ```ts
    import { Types } from "mongoose";
-   const incDec = Types.Decimal128.fromString(Money.usd(additionalBudgetUsd).toDecimalString());
+   const incDec = Types.Decimal128.fromString(
+     Money.usd(additionalBudgetUsd).toDecimalString(),
+   );
    // $inc: { totalUsd: incDec, remaining: incDec, "budget.maxCostUsd": incDec, ... }
    ```
 3. Tambahkan test presisi (mis. `0.1 + 0.2`) dan test bahwa budget bertambah benar tanpa drift.
 
 **DoD.**
+
 - [ ] Tidak ada `as unknown as number` pada jalur uang
 - [ ] Test presisi Decimal128 lulus
 - [ ] `add_budget` menaikkan budget dengan benar lalu resume
@@ -287,6 +302,7 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 4. Pada `security.yml`, buat folder hasil sebelum redirect (`mkdir -p security-results`) dan pertimbangkan menghapus `continue-on-error` pada docker scan.
 
 **DoD.**
+
 - [ ] CI gagal jika Docker image tidak ter-build
 - [ ] Smoke E2E hijau di CI
 - [ ] `gitleaks` job aktif
@@ -303,11 +319,13 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** README mengiklankan 5 provider LLM, sementara kode hanya mengimplementasi Claude + Gemini. Semantic cache & research juga ditampilkan seolah aktif. Ada juga drift kontrak API (response submit 201 vs 202).
 
 **Aksi.**
+
 1. Tandai provider yang belum diimplementasi sebagai "roadmap" atau implementasikan.
 2. Tambahkan bagian **Known Limitations** (research stub, cache belum aktif, QA heuristik).
 3. Sinkronkan contoh response API dengan implementasi nyata (lihat API-01).
 
 **DoD.**
+
 - [ ] Tidak ada klaim fitur yang tidak ada di kode
 - [ ] Ada bagian Known Limitations
 
@@ -321,10 +339,12 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** Research phase saat ini placeholder: `researchSummary = "Research context for: " + prompt.slice(0,200)`. Task full-path menerima konteks palsu → output bisa salah tapi terlihat kredibel.
 
 **Aksi.**
+
 1. Implementasikan `WebSearchWorker`/research nyata (sumber, sitasi, confidence), atau
 2. Jika belum, hapus jalur "full/research" dari klaim & UI hingga siap.
 
 **DoD.**
+
 - [ ] Research menghasilkan konteks nyata + sumber, ATAU klaim research dinonaktifkan
 - [ ] Tidak ada konteks placeholder yang dikirim ke produksi
 
@@ -338,11 +358,13 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** Runbook menyuruh on-call query `db.audit_trail` dan `db.agent_executions`, namun runtime tidak pernah menulis koleksi ini (hanya `task_envelopes.stateTransitions`). Investigasi insiden akan gagal.
 
 **Aksi.**
+
 1. Buat Mongoose model untuk `audit_trail` dan `agent_executions` sesuai `contracts/audit.ts`.
 2. Tulis entri audit pada: transisi stage, compliance violation (payload di-redaksi/hash, bukan prompt mentah), eskalasi, keputusan user.
 3. Jika tidak diimplementasi sekarang, koreksi runbook agar sesuai realita.
 
 **DoD.**
+
 - [ ] Koleksi audit benar-benar terisi saat runtime, ATAU runbook dikoreksi
 - [ ] Violation tercatat tanpa menyimpan prompt mentah
 
@@ -356,11 +378,13 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** API key disimpan di `localStorage` → XSS apa pun dapat mencuri key (akses penuh task).
 
 **Aksi.**
+
 1. Pindah ke cookie `httpOnly` + backend proxy (dashboard memanggil route Next.js server yang menambahkan key), sehingga key tidak pernah ada di JS klien.
 2. Terapkan Content-Security-Policy ketat di Next.js.
 3. Minimal jangka pendek: sanitasi input + CSP + dokumentasikan risiko.
 
 **DoD.**
+
 - [ ] API key tidak lagi dapat dibaca dari `localStorage`/JS klien
 - [ ] CSP ketat aktif
 
@@ -374,18 +398,25 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** Bentuk error tidak konsisten (`{error,message,issues}` vs `{error,message}`), tidak ada `requestId`/correlationId di response, double route registration (`/` dan `/api/v1`), drift response submit (README 201 vs kode 202), tidak ada OpenAPI.
 
 **Aksi.**
+
 1. Standardisasi envelope:
    ```json
-   { "success": false,
-     "error": { "code": "VALIDATION_ERROR", "message": "Invalid input provided",
-       "details": [{ "field": "prompt", "message": "prompt is required" }] },
-     "requestId": "req_01HXYZ" }
+   {
+     "success": false,
+     "error": {
+       "code": "VALIDATION_ERROR",
+       "message": "Invalid input provided",
+       "details": [{ "field": "prompt", "message": "prompt is required" }]
+     },
+     "requestId": "req_01HXYZ"
+   }
    ```
 2. Sisipkan `requestId` (correlationId) ke setiap response (sukses & error).
 3. Putuskan satu base path resmi (`/api/v1`), redirect/deprecate yang lain.
 4. Tambahkan OpenAPI spec (mis. `@fastify/swagger`).
 
 **DoD.**
+
 - [ ] Semua error memakai envelope konsisten + `requestId`
 - [ ] OpenAPI tersedia & sinkron dengan README
 - [ ] Base path tunggal yang jelas
@@ -400,11 +431,13 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** Test injection saat ini hanya memverifikasi regex; tidak ada adversarial nyata (base64, terjemahan, unicode, indirect), tidak ada eval hallucination/PII.
 
 **Aksi.**
+
 1. Tambah kasus: injection terenkode base64, bahasa Indonesia, homoglyph, indirect injection via konten/riset.
 2. Tambah eval output-safety: PII leak, kebocoran system prompt.
 3. Tambahkan ke CI sebagai gerbang.
 
 **DoD.**
+
 - [ ] Suite adversarial gagal sebelum AIS-02 dan lulus setelahnya
 - [ ] Output-safety eval aktif di CI
 
@@ -420,11 +453,13 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** SSE memakai `setInterval(1s)` + `findOne` per koneksi; beban DB linear terhadap koneksi, dan query bisa overlap bila DB >1s. Tidak ada batas koneksi.
 
 **Aksi.**
+
 1. Ganti polling dengan MongoDB Change Streams atau pub/sub (Redis).
 2. Tambahkan guard re-entrancy bila tetap polling sementara.
 3. Batasi jumlah koneksi SSE per tenant.
 
 **DoD.**
+
 - [ ] Tidak ada polling per-detik per koneksi
 - [ ] Beban DB tidak naik linear terhadap koneksi SSE
 
@@ -438,10 +473,12 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** `ProviderRegistry` di task-processor dibuat tanpa `cache` → optimasi biaya/latensi (Upstash semantic cache) tidak aktif meski terkonfigurasi.
 
 **Aksi.**
+
 1. Inject `CategoryCache` ke `ProviderRegistry` pada task-processor.
 2. Pastikan TTL category (financial=0) dihormati (sudah ada di classifier).
 
 **DoD.**
+
 - [ ] Cache hit terobservasi pada prompt berulang non-financial
 - [ ] Financial prompt tidak pernah di-cache
 
@@ -455,10 +492,12 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** Banyak `as unknown as Record<string,unknown>` antar boundary mengikis type safety. Paling berisiko pada jalur uang & hasil agent.
 
 **Aksi.**
+
 1. Definisikan tipe I/O agent yang eksplisit (discriminated unions) alih-alih cast.
 2. Pastikan `core` tidak mengimpor infra (verifikasi `mongoose` tidak bocor ke `core`).
 
 **DoD.**
+
 - [ ] Tidak ada cast tak aman pada jalur uang & output agent
 - [ ] `core` bebas dependensi infra
 
@@ -472,10 +511,12 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** Worker dirancang single-instance; klaim atomic claim ada, tapi multi-instance perlu jaminan kuat agar tidak double-process.
 
 **Aksi.**
+
 1. Tambahkan leader election (mis. lock Redis/Mongo TTL) atau pastikan atomic claim teruji untuk N instance.
 2. Tambah test konkruensi.
 
 **DoD.**
+
 - [ ] Aman dijalankan multi-instance tanpa double-execution
 
 ---
@@ -488,10 +529,12 @@ Centang `[ ]` menjadi `[x]` saat selesai.
 **Masalah.** Tidak ada retention policy untuk prompt/output user; tidak ada consent/DPA formal dengan provider LLM.
 
 **Aksi.**
+
 1. Tetapkan kebijakan retensi (mis. TTL index untuk task lama / anonymization terjadwal).
 2. Dokumentasikan DPA dengan provider; tambahkan consent di alur submit bila relevan.
 
 **DoD.**
+
 - [ ] Kebijakan retensi terimplementasi (TTL/anonymization)
 - [ ] DPA & consent terdokumentasi
 
@@ -539,3 +582,10 @@ pnpm audit --audit-level=high
 ---
 
 _Dokumen perbaikan ini diturunkan dari audit production-readiness Bureau. Perbarui status centang seiring penyelesaian item._
+
+### Catatan implementasi tenant scope provider keys
+
+- Jalankan backfill sebelum deploy schema baru penuh:
+  `node scripts/backfill-user-provider-keys-tenant.mjs`
+- Script mengisi `tenantId` pada `user_provider_keys` bila mapping `userId -> tenantId` unik dari `task_envelopes`.
+- Script melewati record ambigu/konflik dan mencetak daftar `skipped` untuk resolusi manual.

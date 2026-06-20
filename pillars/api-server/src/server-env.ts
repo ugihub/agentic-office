@@ -17,9 +17,10 @@ const PEM_PUBLIC_HEADER = "BEGIN PUBLIC KEY";
 
 function looksLikeEscapedNewlines(value: string): boolean {
   // Cheap check: a real PEM with no escaped newlines shouldn't match.
-  // If the value contains `\` followed by `n` and lacks real `\n` chars,
-  // we are looking at the bug class.
-  if (value.includes("\n")) return false;
+  // If the value contains `\` followed by `n` we are looking at the
+  // bug class — regardless of whether the value also has real newlines.
+  // A mixed-encoding PEM (partial-escape) is also suspicious and must
+  // be flagged, not silently accepted. BUG-10.
   return /\\n/.test(value);
 }
 

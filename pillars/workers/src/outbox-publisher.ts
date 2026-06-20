@@ -77,6 +77,7 @@ async function processBatch(): Promise<void> {
         const failResult = await markOutboxFailed(
           entry.outboxId,
           entry.attempts,
+          msg, // BUG-12: pass failure reason for observability
         );
         if (!failResult.ok) {
           log.error(

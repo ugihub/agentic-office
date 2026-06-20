@@ -6,11 +6,15 @@
  */
 import type {
   Document,
-  FilterQuery,
   Model,
   UpdateQuery,
   QueryOptions,
+  RootFilterQuery,
 } from "mongoose";
+// Mongoose v8 renamed `FilterQuery` -> `RootFilterQuery`. The v8 type
+// uses Record<string, unknown> for top-level keys, not a per-key
+// mapped type. Import the actual v8 type to stay forward-compatible.
+// Pre-existing blocker (HEAD 63447e8) surfaced during P2 verification.
 import { type Result, ok, err, tryAsync } from "@bureau/shared-kernel";
 import { TaskNotFoundError } from "@bureau/shared-kernel";
 
@@ -34,7 +38,7 @@ export class BaseRepository<TDoc extends Document & { tenantId: string }> {
   ): Promise<Result<TDoc, TaskNotFoundError>> {
     const result = await tryAsync(async () => {
       const doc = await this.model
-        .findOne({ _id: id, tenantId } as FilterQuery<TDoc>)
+        .findOne({ _id: id, tenantId } as RootFilterQuery<TDoc>)
         .lean()
         .exec();
       return doc as TDoc | null;
@@ -53,7 +57,7 @@ export class BaseRepository<TDoc extends Document & { tenantId: string }> {
 
   /** Find multiple documents, scoped to tenant */
   async findMany(
-    filter: FilterQuery<TDoc>,
+    filter: RootFilterQuery<TDoc>,
     tenantId: string,
     options: FindOptions = {},
   ): Promise<Result<TDoc[], Error>> {
@@ -81,7 +85,7 @@ export class BaseRepository<TDoc extends Document & { tenantId: string }> {
 
   /** Update one document atomically */
   async updateOne(
-    filter: FilterQuery<TDoc>,
+    filter: RootFilterQuery<TDoc>,
     update: UpdateQuery<TDoc>,
     options?: QueryOptions<TDoc>,
   ): Promise<Result<TDoc | null, Error>> {
@@ -93,13 +97,16 @@ export class BaseRepository<TDoc extends Document & { tenantId: string }> {
           ...options,
         })
         .exec();
-      return doc as TDoc | null;
+      // Mongoose v8 returns `ModifyResult<TDoc> | null` from
+      // findOneAndUpdate. The shapes overlap but TS does not infer
+      // it, so cast through unknown.
+      return doc as unknown as TDoc | null;
     });
   }
 
   /** Count documents in tenant scope */
   async count(
-    filter: FilterQuery<TDoc>,
+    filter: RootFilterQuery<TDoc>,
     tenantId: string,
   ): Promise<Result<number, Error>> {
     return tryAsync(async () =>
@@ -109,7 +116,7 @@ export class BaseRepository<TDoc extends Document & { tenantId: string }> {
 
   /** Check existence */
   async exists(
-    filter: FilterQuery<TDoc>,
+    filter: RootFilterQuery<TDoc>,
     tenantId: string,
   ): Promise<Result<boolean, Error>> {
     const result = await tryAsync(async () =>

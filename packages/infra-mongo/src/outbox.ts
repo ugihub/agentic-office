@@ -34,6 +34,10 @@ export interface OutboxDocument extends Document {
   jobName: string;
   jobData: Record<string, unknown>;
   headers: Record<string, string>;
+  /** BUG-12: structured failure data so on-call can debug poisoned entries. */
+  lastFailureReason?: string;
+  /** BUG-12: when the entry last moved to Failed status. */
+  failedAt?: Date;
 }
 
 const outboxSchema = new Schema<OutboxDocument>(
@@ -53,6 +57,9 @@ const outboxSchema = new Schema<OutboxDocument>(
     jobName: { type: String, required: true },
     jobData: { type: Schema.Types.Mixed, required: true },
     headers: { type: Map, of: String, default: {} },
+    // BUG-12: structured failure observability.
+    lastFailureReason: { type: String, default: null },
+    failedAt: { type: Date, default: null },
   },
   {
     strict: true,
@@ -153,19 +160,32 @@ export async function markOutboxCompleted(
 /**
  * Mark an outbox entry as failed with backoff.
  * Exponential backoff: 2^attempts * 1000ms, capped at 5 minutes.
+ *
+ * BUG-12: 5-attempt cap already existed but produced no observability
+ * when a poisoned entry finally gave up. We now record the failure
+ * reason and timestamp so the publisher can log/alert on it.
  */
 export async function markOutboxFailed(
   outboxId: string,
   attempts: number,
+  failureReason?: string,
 ): Promise<Result<void, Error>> {
   const backoffMs = Math.min(Math.pow(2, attempts) * 1000, 300000);
   const nextAttemptAt = new Date(Date.now() + backoffMs);
+  const isFinalFailure = attempts >= 5;
 
   return tryAsync(async () => {
     await OutboxModel.updateOne(
       { outboxId },
       {
-        $set: { status: attempts >= 5 ? "Failed" : "Pending", nextAttemptAt },
+        $set: {
+          status: isFinalFailure ? "Failed" : "Pending",
+          nextAttemptAt,
+          // Record failure metadata — always overwrite last reason so
+          // the most recent error is visible in the document.
+          lastFailureReason: failureReason ?? null,
+          failedAt: isFinalFailure ? new Date() : null,
+        },
         $inc: { attempts: 1 },
       },
     ).exec();

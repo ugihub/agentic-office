@@ -174,12 +174,12 @@ URL: `http://localhost:3000` (jalankan dengan `pnpm --filter "@bureau/dashboard"
 
 ### Fitur
 
-| Halaman        | Fungsi                                                         |
-| -------------- | -------------------------------------------------------------- |
-| **/**          | Daftar semua task dengan filter status, biaya, dan waktu       |
-| **/tasks/new** | Form submit task baru (prompt, budget, model tier)             |
-| **/tasks/:id** | Detail task realtime — stage progress, log agent, output akhir |
-| **/settings**  | Konfigurasi API URL + API key (disimpan di localStorage)       |
+| Halaman        | Fungsi                                                                             |
+| -------------- | ---------------------------------------------------------------------------------- |
+| **/**          | Daftar semua task dengan filter status, biaya, dan waktu                           |
+| **/tasks/new** | Form submit task baru (prompt, budget, model tier)                                 |
+| **/tasks/:id** | Detail task realtime — stage progress, log agent, output akhir                     |
+| **/settings**  | Konfigurasi API URL + API key (API URL di localStorage, API key di sessionStorage) |
 
 ### Alur Penggunaan
 
@@ -210,6 +210,7 @@ Panel amber muncul otomatis dengan countdown timer. Pilih:
 1. Buka **/settings → Connection**
 2. Masukkan API Server URL dan API Key
 3. Klik **Test Connection** → **Save Settings**
+4. API key hanya disimpan selama sesi browser (sessionStorage), bukan permanen di localStorage
 
 ### Settings Lanjutan
 
@@ -395,7 +396,7 @@ Idempotency-Key: <uuid>
 }
 ```
 
-Response `201`:
+Response `202`:
 
 ```json
 {

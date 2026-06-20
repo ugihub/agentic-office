@@ -57,8 +57,8 @@ export const OutboxEntryV1Schema = z
 
     targetQueue: z.string().min(1),
     jobName: z.string().min(1),
-    jobData: z.record(z.unknown()),
-    headers: z.record(z.string()),
+    jobData: z.record(z.string(), z.unknown()),
+    headers: z.record(z.string(), z.string()),
   })
   .strip();
 
