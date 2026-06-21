@@ -46,7 +46,7 @@ export function getRedisConnection(options?: RedisConnectionOptions): Redis {
     ...options?.options,
   });
 
-  _redis.on("error", (err) => {
+  _redis.on("error", (err: Error) => {
     // Log but don't crash — ioredis handles reconnection
     process.stderr.write(`[Redis] Error: ${err.message}\n`);
   });

@@ -9,7 +9,7 @@
  * This replaces custom heartbeat mechanism.
  * @see ADR-001: BullMQ stalled job detection
  */
-import { Worker, type Processor, type WorkerOptions } from "bullmq";
+import { Worker, type Job, type Processor, type WorkerOptions } from "bullmq";
 import type { QUEUE_NAMES } from "@bureau/contracts";
 import { getRedisConnection } from "./redis.js";
 
@@ -51,13 +51,13 @@ export function createWorker<T extends Record<string, unknown>, R = void>(
   });
 
   // Standard error logging
-  worker.on("failed", (job, err) => {
+  worker.on("failed", (job: Job | undefined, err: Error) => {
     process.stderr.write(
       `[Worker][${queueName}] Job ${job?.id ?? "unknown"} failed: ${err.message}\n`,
     );
   });
 
-  worker.on("stalled", (jobId) => {
+  worker.on("stalled", (jobId: string) => {
     process.stderr.write(
       `[Worker][${queueName}] Job ${jobId} stalled — will be requeued\n`,
     );
