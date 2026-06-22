@@ -30,7 +30,7 @@ jobs:
         # (don't pass `version:` here — it conflicts with the packageManager field)
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "pnpm"
@@ -120,7 +120,7 @@ jobs:
         # version: read from packageManager field in package.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "pnpm"
