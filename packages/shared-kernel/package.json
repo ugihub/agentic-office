@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "decimal.js": "^10.4.3",
-    "ulid": "^2.3.0"
+    "ulid": "^3.0.2"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.0.0",
