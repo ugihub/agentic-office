@@ -35,7 +35,7 @@
     "@bureau/shared-kernel": "workspace:*",
     "@bureau/telemetry": "workspace:*",
     "ai": "^3.4.0",
-    "@ai-sdk/anthropic": "^0.0.46",
+    "@ai-sdk/anthropic": "^4.0.38",
     "@ai-sdk/google": "^0.0.46",
     "cockatiel": "^3.1.0",
     "ioredis": "^5.11.0",
