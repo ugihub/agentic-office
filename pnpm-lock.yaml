@@ -37,8 +37,8 @@ importers:
         specifier: ^3.0.0
         version: 3.8.4
       turbo:
-        specifier: ^2.0.0
-        version: 2.9.18
+        specifier: ^2.10.9
+        version: 2.10.9
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
@@ -765,8 +765,17 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
+  '@babel/parser@7.29.8':
+    resolution: {integrity: sha512-E8lTAYNB1KW+FH+VGJuZM1ioAx2E6oVlvQFRrf5P8ZZmsiJXYAD9vTFV7yyEURNzgh1dFqMZuO6tUwcARbqFCA==}
+    engines: {node: '>=6.0.0'}
+    hasBin: true
+
   '@babel/types@7.29.7':
     resolution: {integrity: sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/types@7.29.8':
+    resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
 
   '@bcoe/v8-coverage@0.2.3':
@@ -1712,41 +1721,41 @@ packages:
   '@sinclair/typebox@0.27.10':
     resolution: {integrity: sha512-MTBk/3jGLNB2tVxv6uLlFh1iu64iYOQ2PbdOSK3NW8JZsmlaOh2q6sdtKowBhfw8QFLmYNzTW4/oK4uATIi6ZA==}
 
-  '@sveltejs/acorn-typescript@1.0.10':
-    resolution: {integrity: sha512-4WfKk68eTih+MiJD4fSbxN7E8kVBmTMPWHUPYjvl2N0rMs53YLTT8/YjKU5Dtnz5LqDjl7LEw4U7lXR2W3J5WA==}
+  '@sveltejs/acorn-typescript@1.0.13':
+    resolution: {integrity: sha512-wgKggnhZVL9Bfx1OaKKTrYY9BFRk6C8UAkQNUcIv1+llzYrIqy+RZm5HPKzn0NpEBvTVhTqB4kQyllZywsRBRQ==}
     peerDependencies:
       acorn: ^8.9.0
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
-  '@turbo/darwin-64@2.9.18':
-    resolution: {integrity: sha512-9f27peFu16ur8c0v9nUFUEyBnbKuuFsUTjHFWfmwGfzySBXbHwzU44QhZon6Mznz0cHsIr3984NQj/bVrnGSRw==}
+  '@turbo/darwin-64@2.10.9':
+    resolution: {integrity: sha512-Jh+pTGXLNz8+1tkUU13TI/f+ZOI+OvC4YbHi1H+57iSpLt5DR3xgptd+4sA07RdjdRR/RX/01uQQu2OkbzIefA==}
     cpu: [x64]
     os: [darwin]
 
-  '@turbo/darwin-arm64@2.9.18':
-    resolution: {integrity: sha512-9A6TMRq/Ib+QnbhLlgkhOm+624wO4pzSQ/yQviQfWHOlFvaYxdnIAYmu2H6TS6y7kSVL0DvzNe04NbESTOzFVQ==}
+  '@turbo/darwin-arm64@2.10.9':
+    resolution: {integrity: sha512-aqtpPkiIC4IUas8Vv27oJ3aDfTuP1d5wofd01dZ7gfhHRrIKuFdqQb4imvNnVFahcOViF9Jh8Oi7feDoz8/ciA==}
     cpu: [arm64]
     os: [darwin]
 
-  '@turbo/linux-64@2.9.18':
-    resolution: {integrity: sha512-zCdIDtz69AnbYh913elJRRoF3QY5aa2HNnf+4rAkc7bQ+tWujiDkCNV7stazOUPggaDvhKIf2Z87qHftTeXSkw==}
+  '@turbo/linux-64@2.10.9':
+    resolution: {integrity: sha512-XyAneUBsS5uNOUOjBSs81zyigMVwwhVUd3u7F2JFMKGQk6F7eNAiOEBASJ+aHLldjYsOEjhfW+5gWIqwziyFFw==}
     cpu: [x64]
-    os: [linux]
+    os: [android, linux]
 
-  '@turbo/linux-arm64@2.9.18':
-    resolution: {integrity: sha512-Va1kXI04naMgYwqv/5Dfa36dTDx8015U7oaQAjrXa45ua9OoFjSV4OmvkML4EmXvUclQHCiBRbY8bvd0jV7eAg==}
+  '@turbo/linux-arm64@2.10.9':
+    resolution: {integrity: sha512-5jAcldLnkuWIjujGhCn2MGIeUwW8IVNOq9Sce4EEzzgLcxmhTasbV0RiW6ZkaRdOjmOCGzeNXPLkDJEOIucOLw==}
     cpu: [arm64]
-    os: [linux]
+    os: [android, linux]
 
-  '@turbo/windows-64@2.9.18':
-    resolution: {integrity: sha512-m0kDhZANxSNz9ck1ybogFscHabriAsp4eDFNrN/1H5WrgTF7b3VlcPZnhuO3v2+E2KnCbeAc+UUT10BZZHdDKw==}
+  '@turbo/windows-64@2.10.9':
+    resolution: {integrity: sha512-u1xGpGlefzuhBedbt/VR2nWdftfFVZwPeDg9e5uZl68sV1fL3HNYTNr5VyHkzgtPK2VTYg1x4OKZuGrh1Gvhtg==}
     cpu: [x64]
     os: [win32]
 
-  '@turbo/windows-arm64@2.9.18':
-    resolution: {integrity: sha512-nUdR8WqoomUys9iIQmG45TMiizJ+5BV8egSeLLZba/AWblyp3fVBcIH1kSE58OtK4g2YzbMJEth6Ttv9w5rqMA==}
+  '@turbo/windows-arm64@2.10.9':
+    resolution: {integrity: sha512-W2Ub165Qv0iMFljbYKxxbZN+2dVSngnzEjQNEFXtnz5oJVx9XSypmNmUvMtuYMeZ3kdVC1zI7yd/rtuX+SDnbg==}
     cpu: [arm64]
     os: [win32]
 
@@ -1957,6 +1966,11 @@ packages:
 
   acorn@8.17.0:
     resolution: {integrity: sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==}
+    engines: {node: '>=0.4.0'}
+    hasBin: true
+
+  acorn@8.18.0:
+    resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
     engines: {node: '>=0.4.0'}
     hasBin: true
 
@@ -2281,6 +2295,7 @@ packages:
   cron-parser@4.9.0:
     resolution: {integrity: sha512-p0SaNjrHOnQeR8/VnfGbmg9te2kfyYSQ7Sc/j/6DtPL3JQvKxmjO9TSjNFpujqV3vEYYBvNNvXSxzyksBWAx1Q==}
     engines: {node: '>=12.0.0'}
+    deprecated: v4 is no longer maintained, upgrade to v5
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -2340,8 +2355,8 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
-  devalue@5.8.1:
-    resolution: {integrity: sha512-4CXDYRBGqN+57wVJkuXBYmpAVUSg3L6JAQa/DFqm238G73E1wuyc/JhGQJzN7vUf/CMphYau2zXbfWzDR5aTEw==}
+  devalue@5.9.0:
+    resolution: {integrity: sha512-RWrqdArjvPbsATEhOPUo6Wndc/iWnkWKlhIrdlF3zMMYo/c3CVtoaVAyLtWxz5h8nSlkHzxnzV2uLydPXmtF+A==}
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
@@ -2484,8 +2499,8 @@ packages:
     resolution: {integrity: sha512-Ap6G0WQwcU/LHsvLwON1fAQX9Zp0A2Y6Y/cJBl9r/JbW90Zyg4/zbG6zzKa2OTALELarYHmKu0GhpM5EO+7T0g==}
     engines: {node: '>=0.10'}
 
-  esrap@2.2.12:
-    resolution: {integrity: sha512-On0QbLyaiAkVC4eXtgnXK9Kh2opit+3rcUSOc45DqJ2s/X2eXAHsGOKRSJ6IDagQEW5vPyivANfXUiqgXC67Rw==}
+  esrap@2.3.4:
+    resolution: {integrity: sha512-CHnJXZDfBeOAjLIGNy/0BEsmDu5+irHgUXRW9pGptxCbO3uyjJ98crilzFgiBqizW94UodjX3GAPLg/dhEnUfA==}
     peerDependencies:
       '@typescript-eslint/types': ^8.2.0
     peerDependenciesMeta:
@@ -2674,7 +2689,7 @@ packages:
   git-raw-commits@4.0.0:
     resolution: {integrity: sha512-ICsMM1Wk8xSGMowkOmPrzo2Fgmfo4bMHLNX6ytHjajRJUqvHOw/TFapQ+QG75c3X/tTDDhOSRPGC52dDbNM8FQ==}
     engines: {node: '>=16'}
-    deprecated: This package is no longer maintained. For the JavaScript API, please use @conventional-changelog/git-client instead.
+    deprecated: Deprecated and no longer maintained. Use @conventional-changelog/git-client instead.
     hasBin: true
 
   glob-parent@5.1.2:
@@ -3278,6 +3293,11 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  nanoid@3.3.18:
+    resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
+    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
   nanoid@3.3.6:
     resolution: {integrity: sha512-BGcqMMJuToF7i1rt+2PWSNVnWIkGCU78jBG3RxO/bZlnZPK2Cmi2QaffxGO/2RvWi9sL+FAiRiXMgsyxQ1DIDA==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -3545,6 +3565,10 @@ packages:
 
   postcss@8.5.15:
     resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
+    engines: {node: ^10 || ^12 || >=14}
+
+  postcss@8.5.26:
+    resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
 
   prelude-ls@1.2.1:
@@ -3989,8 +4013,8 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
-  turbo@2.9.18:
-    resolution: {integrity: sha512-bwabv6PupzeavybzEoArBAkwq5fnzwf8OFnRtpHwnviFWuwJPFxtyH+aVp36TmIqK3aYYgtTJ3J0m2ysxxSzQg==}
+  turbo@2.10.9:
+    resolution: {integrity: sha512-Yl9+ukxH+UmPtKidpDkjn82tvPoEvFNb9UACd9vUomN1Ft0cwl3rx0P8yC1D93W9EOsWRMjllvIDG8y25sFOog==}
     hasBin: true
 
   type-check@0.4.0:
@@ -4337,7 +4361,16 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.7
 
+  '@babel/parser@7.29.8':
+    dependencies:
+      '@babel/types': 7.29.8
+
   '@babel/types@7.29.7':
+    dependencies:
+      '@babel/helper-string-parser': 7.29.7
+      '@babel/helper-validator-identifier': 7.29.7
+
+  '@babel/types@7.29.8':
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
@@ -5185,30 +5218,30 @@ snapshots:
 
   '@sinclair/typebox@0.27.10': {}
 
-  '@sveltejs/acorn-typescript@1.0.10(acorn@8.17.0)':
+  '@sveltejs/acorn-typescript@1.0.13(acorn@8.18.0)':
     dependencies:
-      acorn: 8.17.0
+      acorn: 8.18.0
 
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
 
-  '@turbo/darwin-64@2.9.18':
+  '@turbo/darwin-64@2.10.9':
     optional: true
 
-  '@turbo/darwin-arm64@2.9.18':
+  '@turbo/darwin-arm64@2.10.9':
     optional: true
 
-  '@turbo/linux-64@2.9.18':
+  '@turbo/linux-64@2.10.9':
     optional: true
 
-  '@turbo/linux-arm64@2.9.18':
+  '@turbo/linux-arm64@2.10.9':
     optional: true
 
-  '@turbo/windows-64@2.9.18':
+  '@turbo/windows-64@2.10.9':
     optional: true
 
-  '@turbo/windows-arm64@2.9.18':
+  '@turbo/windows-arm64@2.10.9':
     optional: true
 
   '@types/conventional-commits-parser@5.0.2':
@@ -5410,7 +5443,7 @@ snapshots:
 
   '@vue/compiler-core@3.5.38':
     dependencies:
-      '@babel/parser': 7.29.7
+      '@babel/parser': 7.29.8
       '@vue/shared': 3.5.38
       entities: 7.0.1
       estree-walker: 2.0.2
@@ -5423,14 +5456,14 @@ snapshots:
 
   '@vue/compiler-sfc@3.5.38':
     dependencies:
-      '@babel/parser': 7.29.7
+      '@babel/parser': 7.29.8
       '@vue/compiler-core': 3.5.38
       '@vue/compiler-dom': 3.5.38
       '@vue/compiler-ssr': 3.5.38
       '@vue/shared': 3.5.38
       estree-walker: 2.0.2
       magic-string: 0.30.21
-      postcss: 8.5.15
+      postcss: 8.5.26
       source-map-js: 1.2.1
 
   '@vue/compiler-ssr@3.5.38':
@@ -5489,6 +5522,8 @@ snapshots:
       acorn: 8.17.0
 
   acorn@8.17.0: {}
+
+  acorn@8.18.0: {}
 
   ai@3.4.33(react@19.2.5)(sswr@2.2.0(svelte@5.56.3(@typescript-eslint/types@7.18.0)))(svelte@5.56.3(@typescript-eslint/types@7.18.0))(vue@3.5.38(typescript@5.9.3))(zod@3.25.76):
     dependencies:
@@ -5833,7 +5868,7 @@ snapshots:
   detect-libc@2.1.2:
     optional: true
 
-  devalue@5.8.1: {}
+  devalue@5.9.0: {}
 
   devlop@1.1.0:
     dependencies:
@@ -6010,7 +6045,7 @@ snapshots:
     dependencies:
       estraverse: 5.3.0
 
-  esrap@2.2.12(@typescript-eslint/types@7.18.0):
+  esrap@2.3.4(@typescript-eslint/types@7.18.0):
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
     optionalDependencies:
@@ -6967,6 +7002,8 @@ snapshots:
 
   nanoid@3.3.14: {}
 
+  nanoid@3.3.18: {}
+
   nanoid@3.3.6: {}
 
   natural-compare@1.4.0: {}
@@ -7208,6 +7245,12 @@ snapshots:
   postcss@8.5.15:
     dependencies:
       nanoid: 3.3.14
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+
+  postcss@8.5.26:
+    dependencies:
+      nanoid: 3.3.18
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -7632,16 +7675,16 @@ snapshots:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.5.5
-      '@sveltejs/acorn-typescript': 1.0.10(acorn@8.17.0)
+      '@sveltejs/acorn-typescript': 1.0.13(acorn@8.18.0)
       '@types/estree': 1.0.9
       '@types/trusted-types': 2.0.7
-      acorn: 8.17.0
+      acorn: 8.18.0
       aria-query: 5.3.1
       axobject-query: 4.1.0
       clsx: 2.1.1
-      devalue: 5.8.1
+      devalue: 5.9.0
       esm-env: 1.2.2
-      esrap: 2.2.12(@typescript-eslint/types@7.18.0)
+      esrap: 2.3.4(@typescript-eslint/types@7.18.0)
       is-reference: 3.0.3
       locate-character: 3.0.0
       magic-string: 0.30.21
@@ -7750,14 +7793,14 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  turbo@2.9.18:
+  turbo@2.10.9:
     optionalDependencies:
-      '@turbo/darwin-64': 2.9.18
-      '@turbo/darwin-arm64': 2.9.18
-      '@turbo/linux-64': 2.9.18
-      '@turbo/linux-arm64': 2.9.18
-      '@turbo/windows-64': 2.9.18
-      '@turbo/windows-arm64': 2.9.18
+      '@turbo/darwin-64': 2.10.9
+      '@turbo/darwin-arm64': 2.10.9
+      '@turbo/linux-64': 2.10.9
+      '@turbo/linux-arm64': 2.10.9
+      '@turbo/windows-64': 2.10.9
+      '@turbo/windows-arm64': 2.10.9
 
   type-check@0.4.0:
     dependencies:
